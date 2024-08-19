@@ -29,7 +29,6 @@ impl Processable for EventsExtractor {
             .data
             .par_iter()
             .map(|txn| {
-                let mut events = vec![];
                 let txn_version = txn.version as i64;
                 let block_height = txn.block_height as i64;
                 let txn_data = match txn.txn_data.as_ref() {
@@ -50,9 +49,7 @@ impl Processable for EventsExtractor {
                     _ => &default,
                 };
 
-                let txn_events = EventModel::from_events(raw_events, txn_version, block_height);
-                events.extend(txn_events);
-                events
+                EventModel::from_events(raw_events, txn_version, block_height)
             })
             .flatten()
             .collect::<Vec<EventModel>>();
