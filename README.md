@@ -216,11 +216,15 @@ To customize the processor to index events from your custom contract, you can ma
 - `EventsStorer`
     - If you need to change the database model, you can generate a new database migration by going to `src/db/postgres`
       and running
-
     ```bash
     diesel migration generate {migration_name} 
     ```
-    - Add your migration changes to `up.sql` and `down.sql`, then run `diesel migration run --database-url={YOUR_DATABASE_URL}` to update `schema.rs`.
+    - Add your migration changes to `up.sql` and `down.sql`, then run
+  
+    ```bash
+    diesel migration run --database-url={YOUR_DATABASE_URL}
+    ```
+    to update `schema.rs`.
 
     - And then update the `EventsStorer.process()` to handle storing the events data to the updated database model
 
