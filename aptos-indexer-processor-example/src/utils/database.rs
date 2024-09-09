@@ -120,7 +120,7 @@ pub async fn new_db_pool(database_url: &str, max_pool_size: Option <u32>) -> Res
         AsyncDieselConnectionManager::<MyDbConnection>::new_with_config(database_url, config);
 
     let pool = Pool::builder()
-        .max_size(max_pool_size)
+        .max_size(max_pool_size.unwrap_or(DEFAULT_MAX_POOL_SIZE))
         .build(manager)
         .await?;
     Ok(Arc::new(pool))
