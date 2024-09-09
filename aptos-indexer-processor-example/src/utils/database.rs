@@ -113,7 +113,7 @@ fn parse_and_clean_db_url(url: &str) -> (String, Option<String>) {
     (db_url.to_string(), cert_path)
 }
 
-pub async fn new_db_pool(database_url: &str, max_pool_size: u32) -> Result<ArcDbPool, PoolError> {
+pub async fn new_db_pool(database_url: &str, max_pool_size: Option <u32>) -> Result<ArcDbPool, PoolError> {
     let mut config = ManagerConfig::<MyDbConnection>::default();
     config.custom_setup = Box::new(|conn| Box::pin(establish_connection(conn)));
     let manager =
