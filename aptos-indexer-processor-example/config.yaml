@@ -7,7 +7,7 @@ server_config:
     indexer_grpc_data_service_address: "https://grpc.testnet.aptoslabs.com:443"
     starting_version: 0
     # request_ending_version: 10000
-    auth_token: "AUTH_TOKEN"
+    auth_token: "aptoslabs_No5KWpMQKvz_7ohYQejzxmgpL27BS9gK784GpA14EP9mb"
     request_name_header: "events-processor"
   db_config:
     postgres_connection_string: postgresql://postgres:@localhost:5432/example
