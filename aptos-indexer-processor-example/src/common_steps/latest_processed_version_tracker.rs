@@ -49,7 +49,6 @@ where
     pub async fn new(
         indexer_processor_config: IndexerProcessorConfig,
         starting_version: u64,
-        // tracker_name: String,
     ) -> Result<Self> {
         let db_config: DbConfig = indexer_processor_config.db_config;
         let conn_pool = new_db_pool(
@@ -107,6 +106,8 @@ where
         self.last_success_batch = Some(new_prev_batch);
     }
 
+    /// Saves the last successful batch to processor_status or backfill_processor_status table
+    /// depending on the backfill_mode.
     async fn save_processor_status(&mut self) -> Result<(), ProcessorError> {
         if let Some(last_success_batch) = self.last_success_batch.as_ref() {
             let end_timestamp = last_success_batch
@@ -134,9 +135,29 @@ where
                     last_success_version: last_success_batch.metadata.end_version as i64,
                     last_transaction_timestamp: end_timestamp,
                 };
-                self.save_normal_status(status).await?;
+                self.save_status(status).await?;
             }
         }
+        Ok(())
+    }
+
+    async fn save_status(&self, status: ProcessorStatus) -> Result<(), ProcessorError> {
+        execute_with_better_error(
+            self.conn_pool.clone(),
+            diesel::insert_into(processor_status::table)
+                .values(&status)
+                .on_conflict(processor_status::processor)
+                .do_update()
+                .set((
+                    processor_status::last_success_version
+                        .eq(excluded(processor_status::last_success_version)),
+                    processor_status::last_updated.eq(excluded(processor_status::last_updated)),
+                    processor_status::last_transaction_timestamp
+                        .eq(excluded(processor_status::last_transaction_timestamp)),
+                )),
+            Some(" WHERE processor_status.last_success_version <= EXCLUDED.last_success_version "),
+        )
+        .await?;
         Ok(())
     }
 
@@ -159,26 +180,6 @@ where
                 )),
             Some(" WHERE backfill_processor_status.last_success_version <= EXCLUDED.last_success_version "),
         ).await?;
-        Ok(())
-    }
-
-    async fn save_normal_status(&self, status: ProcessorStatus) -> Result<(), ProcessorError> {
-        execute_with_better_error(
-            self.conn_pool.clone(),
-            diesel::insert_into(processor_status::table)
-                .values(&status)
-                .on_conflict(processor_status::processor)
-                .do_update()
-                .set((
-                    processor_status::last_success_version
-                        .eq(excluded(processor_status::last_success_version)),
-                    processor_status::last_updated.eq(excluded(processor_status::last_updated)),
-                    processor_status::last_transaction_timestamp
-                        .eq(excluded(processor_status::last_transaction_timestamp)),
-                )),
-            Some(" WHERE processor_status.last_success_version <= EXCLUDED.last_success_version "),
-        )
-        .await?;
         Ok(())
     }
 }
