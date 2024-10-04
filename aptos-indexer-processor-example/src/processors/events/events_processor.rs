@@ -88,7 +88,7 @@ impl EventsProcessor {
                     }
                     info!(
                         "Finished processing events from versions [{:?}, {:?}]",
-                        txn_context.start_version, txn_context.end_version,
+                        txn_context.metadata.start_version, txn_context.metadata.end_version,
                     );
                 }
                 Err(_) => {

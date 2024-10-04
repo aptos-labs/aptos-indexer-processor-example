@@ -7,8 +7,8 @@ edition = "2021"
 [dependencies]
 ahash = { version = "0.8.7", features = ["serde"] }
 anyhow = "1.0.86"
-aptos-indexer-processor-sdk = { git = "https://github.com/aptos-labs/aptos-indexer-processor-sdk.git", rev = "e1e1bdd9349f0a68c9fc53b7e2cebda9e2ce92b7" }
-aptos-indexer-processor-sdk-server-framework = { git = "https://github.com/aptos-labs/aptos-indexer-processor-sdk.git", rev = "e1e1bdd9349f0a68c9fc53b7e2cebda9e2ce92b7" }
+aptos-indexer-processor-sdk = { git = "https://github.com/aptos-labs/aptos-indexer-processor-sdk.git", rev = "dcf9bc54015a28006b8ca383cf2bd829b0c41cd0" }
+aptos-indexer-processor-sdk-server-framework = { git = "https://github.com/aptos-labs/aptos-indexer-processor-sdk.git", rev = "dcf9bc54015a28006b8ca383cf2bd829b0c41cd0" }
 async-trait = "0.1.80"
 chrono = { version = "0.4.19", features = ["clock", "serde"] }
 clap = { version = "4.3.5", features = ["derive", "unstable-styles"] }

@@ -54,14 +54,14 @@ fn insert_events_query(
 
 #[async_trait]
 impl Processable for EventsStorer {
-    type Input = EventModel;
-    type Output = EventModel;
+    type Input = Vec<EventModel>;
+    type Output = Vec<EventModel>;
     type RunType = AsyncRunType;
 
     async fn process(
         &mut self,
-        events: TransactionContext<EventModel>,
-    ) -> Result<Option<TransactionContext<EventModel>>, ProcessorError> {
+        events: TransactionContext<Vec<EventModel>>,
+    ) -> Result<Option<TransactionContext<Vec<EventModel>>>, ProcessorError> {
         let per_table_chunk_sizes: AHashMap<String, usize> = AHashMap::new();
         let execute_res = execute_in_chunks(
             self.conn_pool.clone(),
@@ -74,7 +74,7 @@ impl Processable for EventsStorer {
             Ok(_) => {
                 info!(
                     "Events version [{}, {}] stored successfully",
-                    events.start_version, events.end_version
+                    events.metadata.start_version, events.metadata.end_version
                 );
             }
             Err(e) => {
