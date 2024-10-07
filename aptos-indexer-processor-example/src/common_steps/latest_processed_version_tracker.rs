@@ -1,12 +1,9 @@
-use std::marker::PhantomData;
-
 use crate::{
     config::indexer_processor_config::DbConfig,
     db::common::models::processor_status::ProcessorStatus,
     schema::processor_status,
     utils::database::{execute_with_better_error, new_db_pool, ArcDbPool},
 };
-use ahash::AHashMap;
 use anyhow::{Context, Result};
 use aptos_indexer_processor_sdk::{
     traits::{NamedStep, PollableAsyncRunType, PollableAsyncStep, Processable},
@@ -16,8 +13,11 @@ use aptos_indexer_processor_sdk::{
 use async_trait::async_trait;
 use diesel::{upsert::excluded, ExpressionMethods};
 
-const UPDATE_PROCESSOR_STATUS_SECS: u64 = 1;
+pub const UPDATE_PROCESSOR_STATUS_SECS: u64 = 1;
 
+/// This step tracks the latest version processed by the processor and stores the version in DB.
+/// It assumes that the step inputs are ordered by starting_version.
+/// To guarantee the order by starting_version, you should connect `OrderByStartingVersionStep` before this step.
 pub struct LatestVersionProcessedTracker<T>
 where
     Self: Sized + Send + 'static,
@@ -25,13 +25,8 @@ where
 {
     conn_pool: ArcDbPool,
     tracker_name: String,
-    // Next version to process that we expect.
-    next_version: u64,
     // Last successful batch of sequentially processed transactions. Includes metadata to write to storage.
-    last_success_batch: Option<TransactionContext<()>>,
-    // Tracks all the versions that have been processed out of order.
-    seen_versions: AHashMap<u64, TransactionContext<()>>,
-    _marker: PhantomData<T>,
+    last_success_batch: Option<TransactionContext<T>>,
 }
 
 impl<T> LatestVersionProcessedTracker<T>
@@ -39,11 +34,7 @@ where
     Self: Sized + Send + 'static,
     T: Send + 'static,
 {
-    pub async fn new(
-        db_config: DbConfig,
-        starting_version: u64,
-        tracker_name: String,
-    ) -> Result<Self> {
+    pub async fn new(db_config: DbConfig, tracker_name: String) -> Result<Self> {
         let conn_pool = new_db_pool(
             &db_config.postgres_connection_string,
             Some(db_config.db_pool_size),
@@ -53,24 +44,8 @@ where
         Ok(Self {
             conn_pool,
             tracker_name,
-            next_version: starting_version,
             last_success_batch: None,
-            seen_versions: AHashMap::new(),
-            _marker: PhantomData,
         })
-    }
-
-    fn update_last_success_batch(&mut self, current_batch: TransactionContext<()>) {
-        let mut new_prev_batch = current_batch;
-        // While there are batches in seen_versions that are in order, update the new_prev_batch to the next batch.
-        while let Some(next_version) = self
-            .seen_versions
-            .remove(&(new_prev_batch.metadata.end_version + 1))
-        {
-            new_prev_batch = next_version;
-        }
-        self.next_version = new_prev_batch.metadata.end_version + 1;
-        self.last_success_batch = Some(new_prev_batch);
     }
 
     async fn save_processor_status(&mut self) -> Result<(), ProcessorError> {
@@ -114,7 +89,7 @@ where
 impl<T> Processable for LatestVersionProcessedTracker<T>
 where
     Self: Sized + Send + 'static,
-    T: Send + 'static,
+    T: Clone + Send + 'static,
 {
     type Input = T;
     type Output = T;
@@ -124,30 +99,21 @@ where
         &mut self,
         current_batch: TransactionContext<T>,
     ) -> Result<Option<TransactionContext<T>>, ProcessorError> {
-        // If there's a gap in the next_version and current_version, save the current_version to seen_versions for
-        // later processing.
-        if self.next_version != current_batch.metadata.start_version {
-            tracing::debug!(
-                next_version = self.next_version,
-                step = self.name(),
-                "Gap detected starting from version: {}",
-                current_batch.metadata.start_version
-            );
-            self.seen_versions.insert(
-                current_batch.metadata.start_version,
-                TransactionContext {
-                    data: (), // No data is needed for tracking.
-                    metadata: current_batch.metadata.clone(),
-                },
-            );
-        } else {
-            tracing::debug!("No gap detected");
-            // If the current_batch is the next expected version, update the last success batch
-            self.update_last_success_batch(TransactionContext {
-                data: (), // No data is needed for tracking.
-                metadata: current_batch.metadata.clone(),
-            });
+        // If there's a gap in version, return an error
+        if let Some(last_success_batch) = self.last_success_batch.as_ref() {
+            if last_success_batch.metadata.end_version + 1 != current_batch.metadata.start_version {
+                return Err(ProcessorError::ProcessError {
+                    message: format!(
+                        "Gap detected starting from version: {}",
+                        current_batch.metadata.start_version
+                    ),
+                });
+            }
         }
+
+        // Update the last success batch
+        self.last_success_batch = Some(current_batch.clone());
+
         // Pass through
         Ok(Some(current_batch))
     }
@@ -162,7 +128,7 @@ where
 }
 
 #[async_trait]
-impl<T: Send + 'static> PollableAsyncStep for LatestVersionProcessedTracker<T>
+impl<T: Clone + Send + 'static> PollableAsyncStep for LatestVersionProcessedTracker<T>
 where
     Self: Sized + Send + Sync + 'static,
     T: Send + 'static,

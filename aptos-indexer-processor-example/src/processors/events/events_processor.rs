@@ -1,6 +1,10 @@
+use std::time::Duration;
+
 use super::{events_extractor::EventsExtractor, events_storer::EventsStorer};
 use crate::{
-    common_steps::latest_processed_version_tracker::LatestVersionProcessedTracker,
+    common_steps::latest_processed_version_tracker::{
+        LatestVersionProcessedTracker, UPDATE_PROCESSOR_STATUS_SECS,
+    },
     config::indexer_processor_config::IndexerProcessorConfig,
     utils::{
         chain_id::check_or_update_chain_id,
@@ -12,7 +16,7 @@ use anyhow::Result;
 use aptos_indexer_processor_sdk::{
     aptos_indexer_transaction_stream::{TransactionStream, TransactionStreamConfig},
     builder::ProcessorBuilder,
-    common_steps::TransactionStreamStep,
+    common_steps::{OrderByVersionStep, TransactionStreamStep},
     traits::IntoRunnableStep,
 };
 use tracing::info;
@@ -63,9 +67,12 @@ impl EventsProcessor {
         .await?;
         let events_extractor = EventsExtractor {};
         let events_storer = EventsStorer::new(self.db_pool.clone());
+        let order_step = OrderByVersionStep::new(
+            starting_version,
+            Duration::from_secs(UPDATE_PROCESSOR_STATUS_SECS),
+        );
         let version_tracker = LatestVersionProcessedTracker::new(
             self.config.db_config,
-            starting_version,
             self.config.processor_config.name().to_string(),
         )
         .await?;
@@ -76,6 +83,7 @@ impl EventsProcessor {
         )
         .connect_to(events_extractor.into_runnable_step(), 10)
         .connect_to(events_storer.into_runnable_step(), 10)
+        .connect_to(order_step.into_runnable_step(), 10)
         .connect_to(version_tracker.into_runnable_step(), 10)
         .end_and_return_output_receiver(10);
 
@@ -83,9 +91,6 @@ impl EventsProcessor {
         loop {
             match buffer_receiver.recv().await {
                 Ok(txn_context) => {
-                    if txn_context.data.is_empty() {
-                        continue;
-                    }
                     info!(
                         "Finished processing events from versions [{:?}, {:?}]",
                         txn_context.metadata.start_version, txn_context.metadata.end_version,

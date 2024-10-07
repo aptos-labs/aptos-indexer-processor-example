@@ -55,13 +55,13 @@ fn insert_events_query(
 #[async_trait]
 impl Processable for EventsStorer {
     type Input = Vec<EventModel>;
-    type Output = Vec<EventModel>;
+    type Output = ();
     type RunType = AsyncRunType;
 
     async fn process(
         &mut self,
         events: TransactionContext<Vec<EventModel>>,
-    ) -> Result<Option<TransactionContext<Vec<EventModel>>>, ProcessorError> {
+    ) -> Result<Option<TransactionContext<()>>, ProcessorError> {
         let per_table_chunk_sizes: AHashMap<String, usize> = AHashMap::new();
         let execute_res = execute_in_chunks(
             self.conn_pool.clone(),
@@ -81,7 +81,10 @@ impl Processable for EventsStorer {
                 error!("Failed to store events: {:?}", e);
             }
         }
-        Ok(Some(events))
+        Ok(Some(TransactionContext {
+            data: (),
+            metadata: events.metadata,
+        }))
     }
 }
 
