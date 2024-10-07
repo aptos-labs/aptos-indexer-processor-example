@@ -5,7 +5,7 @@
 #![allow(clippy::extra_unused_lifetimes)]
 
 use ahash::AHashMap;
-use aptos_indexer_processor_sdk::utils::convert::remove_null_bytes;
+use aptos_indexer_processor_sdk::utils::{convert::remove_null_bytes, errors::ProcessorError};
 use diesel::{
     query_builder::{AstPass, Query, QueryFragment, QueryId},
     ConnectionResult, QueryResult,
@@ -20,7 +20,7 @@ use diesel_async::{
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use futures_util::{future::BoxFuture, FutureExt};
 use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 pub type Backend = diesel::pg::Pg;
 
@@ -34,6 +34,7 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("src/db/postgres/mi
 pub const DEFAULT_MAX_POOL_SIZE: u32 = 150;
 
 #[derive(QueryId)]
+#[allow(clippy::too_long_first_doc_paragraph)]
 /// Using this will append a where clause at the end of the string upsert function, e.g.
 /// INSERT INTO ... ON CONFLICT DO UPDATE SET ... WHERE "transaction_version" = excluded."transaction_version"
 /// This is needed when we want to maintain a table with only the latest state
@@ -129,7 +130,7 @@ pub async fn execute_in_chunks<U, T>(
     build_query: fn(Vec<T>) -> (U, Option<&'static str>),
     items_to_insert: &[T],
     chunk_size: usize,
-) -> Result<(), diesel::result::Error>
+) -> Result<(), ProcessorError>
 where
     U: QueryFragment<Backend> + diesel::query_builder::QueryId + Send + 'static,
     T: serde::Serialize + for<'de> serde::Deserialize<'de> + Clone + Send + 'static,
@@ -161,7 +162,7 @@ pub async fn execute_with_better_error<U>(
     pool: ArcDbPool,
     query: U,
     mut additional_where_clause: Option<&'static str>,
-) -> QueryResult<usize>
+) -> Result<usize, ProcessorError>
 where
     U: QueryFragment<Backend> + diesel::query_builder::QueryId + Send,
 {
@@ -176,21 +177,26 @@ where
         where_clause: additional_where_clause,
     };
     let debug_string = diesel::debug_query::<Backend, _>(&final_query).to_string();
-    debug!("Executing query: {:?}", debug_string);
     let conn = &mut pool.get().await.map_err(|e| {
         warn!("Error getting connection from pool: {:?}", e);
-        diesel::result::Error::DatabaseError(
-            diesel::result::DatabaseErrorKind::UnableToSendCommand,
-            Box::new(e.to_string()),
-        )
+        ProcessorError::DBStoreError {
+            message: format!("{:#}", e),
+            query: Some(debug_string.clone()),
+        }
     })?;
-    let res = final_query.execute(conn).await;
-    if let Err(ref e) = res {
-        warn!("Error running query: {:?}\n{:?}", e, debug_string);
-    }
-    res
+    final_query
+        .execute(conn)
+        .await
+        .inspect_err(|e| {
+            warn!("Error running query: {:?}\n{:?}", e, debug_string);
+        })
+        .map_err(|e| ProcessorError::DBStoreError {
+            message: format!("{:#}", e),
+            query: Some(debug_string),
+        })
 }
 
+#[allow(clippy::too_long_first_doc_paragraph)]
 /// Returns the entry for the config hashmap, or the default field count for the insert
 /// Given diesel has a limit of how many parameters can be inserted in a single operation (u16::MAX),
 /// we default to chunk an array of items based on how many columns are in the table.
@@ -223,12 +229,9 @@ where
         where_clause: additional_where_clause,
     };
     let debug_string = diesel::debug_query::<Backend, _>(&final_query).to_string();
-    debug!("Executing query: {:?}", debug_string);
-    let res = final_query.execute(conn).await;
-    if let Err(ref e) = res {
+    final_query.execute(conn).await.inspect_err(|e| {
         warn!("Error running query: {:?}\n{:?}", e, debug_string);
-    }
-    res
+    })
 }
 
 async fn execute_or_retry_cleaned<U, T>(
@@ -237,7 +240,7 @@ async fn execute_or_retry_cleaned<U, T>(
     items: Vec<T>,
     query: U,
     additional_where_clause: Option<&'static str>,
-) -> Result<(), diesel::result::Error>
+) -> Result<(), ProcessorError>
 where
     U: QueryFragment<Backend> + diesel::query_builder::QueryId + Send,
     T: serde::Serialize + for<'de> serde::Deserialize<'de> + Clone,
@@ -265,6 +268,27 @@ pub fn run_pending_migrations<DB: diesel::backend::Backend>(conn: &mut impl Migr
         .expect("[Parser] Migrations failed!");
 }
 
+// For the normal processor build we just use standard Diesel with the postgres
+// feature enabled (which uses libpq under the hood, hence why we named the feature
+// this way).
+#[cfg(feature = "libpq")]
+pub async fn run_migrations(postgres_connection_string: String, _conn_pool: ArcDbPool) {
+    use diesel::{Connection, PgConnection};
+
+    info!("Running migrations: {:?}", postgres_connection_string);
+    let migration_time = std::time::Instant::now();
+    let mut conn =
+        PgConnection::establish(&postgres_connection_string).expect("migrations failed!");
+    run_pending_migrations(&mut conn);
+    info!(
+        duration_in_secs = migration_time.elapsed().as_secs_f64(),
+        "[Parser] Finished migrations"
+    );
+}
+
+// If the libpq feature isn't enabled, we use diesel async instead. This is used by
+// the CLI for the local testnet, where we cannot tolerate the libpq dependency.
+#[cfg(not(feature = "libpq"))]
 pub async fn run_migrations(postgres_connection_string: String, conn_pool: ArcDbPool) {
     use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
 

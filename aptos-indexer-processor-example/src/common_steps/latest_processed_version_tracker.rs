@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use crate::{
     config::indexer_processor_config::DbConfig,
     db::common::models::processor_status::ProcessorStatus,
@@ -15,6 +13,7 @@ use aptos_indexer_processor_sdk::{
 };
 use async_trait::async_trait;
 use diesel::{upsert::excluded, ExpressionMethods};
+use std::marker::PhantomData;
 
 const UPDATE_PROCESSOR_STATUS_SECS: u64 = 1;
 
@@ -101,10 +100,7 @@ where
                             .eq(excluded(processor_status::last_transaction_timestamp)),
                     )),
                 Some(" WHERE processor_status.last_success_version <= EXCLUDED.last_success_version "),
-            ).await.map_err(|e| ProcessorError::DBStoreError {
-                message: format!("Failed to update processor status: {}", e),
-                query: None,
-            })?;
+            ).await?;
         }
         Ok(())
     }
@@ -136,7 +132,7 @@ where
             self.seen_versions.insert(
                 current_batch.metadata.start_version,
                 TransactionContext {
-                    data: (), // No data is needed for tracking.
+                    data: (), // No data is needed for tracking. This is to avoid clone.
                     metadata: current_batch.metadata.clone(),
                 },
             );
@@ -144,7 +140,7 @@ where
             tracing::debug!("No gap detected");
             // If the current_batch is the next expected version, update the last success batch
             self.update_last_success_batch(TransactionContext {
-                data: (), // No data is needed for tracking.
+                data: (), // No data is needed for tracking. This is to avoid clone.
                 metadata: current_batch.metadata.clone(),
             });
         }
