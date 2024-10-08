@@ -122,7 +122,7 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "anyhow",
- "aptos-indexer-processor-sdk",
+ "aptos-indexer-processor-sdk 0.1.0 (git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=5083701530d151284c19c2bed48f1b75658ce353)",
  "aptos-indexer-processor-sdk-server-framework",
  "async-trait",
  "chrono",
@@ -149,10 +149,11 @@ dependencies = [
 [[package]]
 name = "aptos-indexer-processor-sdk"
 version = "0.1.0"
-source = "git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=ca658a0881c4bff4e1dee14c59a7c63608a5b315#ca658a0881c4bff4e1dee14c59a7c63608a5b315"
+source = "git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=5083701530d151284c19c2bed48f1b75658ce353#5083701530d151284c19c2bed48f1b75658ce353"
 dependencies = [
+ "ahash",
  "anyhow",
- "aptos-indexer-transaction-stream",
+ "aptos-indexer-transaction-stream 0.1.0 (git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=5083701530d151284c19c2bed48f1b75658ce353)",
  "aptos-protos",
  "async-trait",
  "bcs",
@@ -161,7 +162,39 @@ dependencies = [
  "derive_builder",
  "futures",
  "hex",
- "instrumented-channel",
+ "instrumented-channel 0.1.0 (git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=5083701530d151284c19c2bed48f1b75658ce353)",
+ "kanal",
+ "mockall",
+ "num_cpus",
+ "once_cell",
+ "petgraph",
+ "prometheus",
+ "prometheus-client",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tiny-keccak",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "aptos-indexer-processor-sdk"
+version = "0.1.0"
+source = "git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=ca658a0881c4bff4e1dee14c59a7c63608a5b315#ca658a0881c4bff4e1dee14c59a7c63608a5b315"
+dependencies = [
+ "anyhow",
+ "aptos-indexer-transaction-stream 0.1.0 (git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=ca658a0881c4bff4e1dee14c59a7c63608a5b315)",
+ "aptos-protos",
+ "async-trait",
+ "bcs",
+ "bigdecimal",
+ "chrono",
+ "derive_builder",
+ "futures",
+ "hex",
+ "instrumented-channel 0.1.0 (git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=ca658a0881c4bff4e1dee14c59a7c63608a5b315)",
  "kanal",
  "mockall",
  "num_cpus",
@@ -184,14 +217,14 @@ version = "1.0.0"
 source = "git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=ca658a0881c4bff4e1dee14c59a7c63608a5b315#ca658a0881c4bff4e1dee14c59a7c63608a5b315"
 dependencies = [
  "anyhow",
- "aptos-indexer-processor-sdk",
+ "aptos-indexer-processor-sdk 0.1.0 (git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=ca658a0881c4bff4e1dee14c59a7c63608a5b315)",
  "aptos-system-utils",
  "async-trait",
  "autometrics",
  "axum 0.7.5",
  "backtrace",
  "clap",
- "instrumented-channel",
+ "instrumented-channel 0.1.0 (git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=ca658a0881c4bff4e1dee14c59a7c63608a5b315)",
  "prometheus-client",
  "serde",
  "serde_yaml",
@@ -205,22 +238,51 @@ dependencies = [
 [[package]]
 name = "aptos-indexer-transaction-stream"
 version = "0.1.0"
-source = "git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=ca658a0881c4bff4e1dee14c59a7c63608a5b315#ca658a0881c4bff4e1dee14c59a7c63608a5b315"
+source = "git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=5083701530d151284c19c2bed48f1b75658ce353#5083701530d151284c19c2bed48f1b75658ce353"
 dependencies = [
  "anyhow",
- "aptos-moving-average",
+ "aptos-moving-average 0.1.0 (git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=5083701530d151284c19c2bed48f1b75658ce353)",
  "aptos-protos",
  "chrono",
  "futures-util",
  "once_cell",
  "prometheus",
  "prost",
- "sample",
+ "sample 0.1.0 (git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=5083701530d151284c19c2bed48f1b75658ce353)",
  "serde",
  "tokio",
  "tonic",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "aptos-indexer-transaction-stream"
+version = "0.1.0"
+source = "git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=ca658a0881c4bff4e1dee14c59a7c63608a5b315#ca658a0881c4bff4e1dee14c59a7c63608a5b315"
+dependencies = [
+ "anyhow",
+ "aptos-moving-average 0.1.0 (git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=ca658a0881c4bff4e1dee14c59a7c63608a5b315)",
+ "aptos-protos",
+ "chrono",
+ "futures-util",
+ "once_cell",
+ "prometheus",
+ "prost",
+ "sample 0.1.0 (git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=ca658a0881c4bff4e1dee14c59a7c63608a5b315)",
+ "serde",
+ "tokio",
+ "tonic",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "aptos-moving-average"
+version = "0.1.0"
+source = "git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=5083701530d151284c19c2bed48f1b75658ce353#5083701530d151284c19c2bed48f1b75658ce353"
+dependencies = [
+ "chrono",
 ]
 
 [[package]]
@@ -1510,6 +1572,19 @@ dependencies = [
 [[package]]
 name = "instrumented-channel"
 version = "0.1.0"
+source = "git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=5083701530d151284c19c2bed48f1b75658ce353#5083701530d151284c19c2bed48f1b75658ce353"
+dependencies = [
+ "delegate",
+ "derive_builder",
+ "kanal",
+ "once_cell",
+ "prometheus",
+ "prometheus-client",
+]
+
+[[package]]
+name = "instrumented-channel"
+version = "0.1.0"
 source = "git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=ca658a0881c4bff4e1dee14c59a7c63608a5b315#ca658a0881c4bff4e1dee14c59a7c63608a5b315"
 dependencies = [
  "delegate",
@@ -2644,6 +2719,14 @@ name = "ryu"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3cb5ba0dc43242ce17de99c180e96db90b235b8a9fdc9543c96d2209116bd9f"
+
+[[package]]
+name = "sample"
+version = "0.1.0"
+source = "git+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git?rev=5083701530d151284c19c2bed48f1b75658ce353#5083701530d151284c19c2bed48f1b75658ce353"
+dependencies = [
+ "tracing",
+]
 
 [[package]]
 name = "sample"
