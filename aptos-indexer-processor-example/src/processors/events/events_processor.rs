@@ -1,8 +1,6 @@
-use super::{
-    events_extractor::EventsExtractor, events_storer::EventsStorer,
-    events_version_tracker_savers::ProcessorStatusSaverImpl,
-};
+use super::{events_extractor::EventsExtractor, events_storer::EventsStorer};
 use crate::{
+    common::processor_status_saver::DefaultProcessorStatusSaver,
     config::indexer_processor_config::IndexerProcessorConfig,
     utils::{
         chain_id::check_or_update_chain_id,
@@ -14,9 +12,10 @@ use anyhow::Result;
 use aptos_indexer_processor_sdk::{
     aptos_indexer_transaction_stream::{TransactionStream, TransactionStreamConfig},
     builder::ProcessorBuilder,
-    common_steps::{TransactionStreamStep, VersionTrackerStep},
+    common_steps::{
+        TransactionStreamStep, VersionTrackerStep, DEFAULT_UPDATE_PROCESSOR_STATUS_SECS,
+    },
     traits::IntoRunnableStep,
-    utils::constants::UPDATE_PROCESSOR_STATUS_SECS,
 };
 use tracing::info;
 
@@ -68,10 +67,10 @@ impl EventsProcessor {
         let events_storer = EventsStorer::new(self.db_pool.clone());
         let version_tracker = VersionTrackerStep::new(
             self.config.processor_config.name().to_string(),
-            ProcessorStatusSaverImpl {
+            DefaultProcessorStatusSaver {
                 conn_pool: self.db_pool.clone(),
             },
-            UPDATE_PROCESSOR_STATUS_SECS,
+            DEFAULT_UPDATE_PROCESSOR_STATUS_SECS,
         );
         // Connect processor steps together
         let (_, buffer_receiver) = ProcessorBuilder::new_with_inputless_first_step(

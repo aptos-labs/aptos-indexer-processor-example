@@ -11,12 +11,13 @@ use aptos_indexer_processor_sdk::{
 };
 use async_trait::async_trait;
 use diesel::{upsert::excluded, ExpressionMethods};
-pub struct ProcessorStatusSaverImpl {
+
+pub struct DefaultProcessorStatusSaver {
     pub conn_pool: ArcDbPool,
 }
 
 #[async_trait]
-impl ProcessorStatusSaver for ProcessorStatusSaverImpl {
+impl ProcessorStatusSaver for DefaultProcessorStatusSaver {
     async fn save_processor_status(
         &self,
         tracker_name: &str,
