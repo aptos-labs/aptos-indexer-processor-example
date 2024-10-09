@@ -15,17 +15,38 @@ use aptos_indexer_processor_sdk::{
 use async_trait::async_trait;
 use diesel::{upsert::excluded, ExpressionMethods};
 
-// Factory function that returns the appropriate saver
+pub enum ProcessorStatusSaverEnum {
+    Default(DefaultProcessorStatusSaver),
+    Backfill(BackfillProcessorStatusSaver),
+}
+
+#[async_trait]
+impl ProcessorStatusSaver for ProcessorStatusSaverEnum {
+    async fn save_processor_status(
+        &self,
+        last_success_batch: &TransactionContext<()>,
+    ) -> Result<(), ProcessorError> {
+        match self {
+            ProcessorStatusSaverEnum::Default(saver) => {
+                saver.save_processor_status(last_success_batch).await
+            }
+            ProcessorStatusSaverEnum::Backfill(saver) => {
+                saver.save_processor_status(last_success_batch).await
+            }
+        }
+    }
+}
+
 pub fn get_processor_status_saver(
     conn_pool: ArcDbPool,
     config: IndexerProcessorConfig,
-) -> Box<dyn ProcessorStatusSaver> {
+) -> ProcessorStatusSaverEnum {
     if let Some(backfill_config) = config.backfill_config {
         let txn_stream_cfg = config.transaction_stream_config;
         let backfill_start_version = txn_stream_cfg.starting_version;
         let backfill_end_version = txn_stream_cfg.request_ending_version;
         let backfill_alias = backfill_config.backfill_alias.clone();
-        Box::new(BackfillProcessorStatusSaver {
+        ProcessorStatusSaverEnum::Backfill(BackfillProcessorStatusSaver {
             conn_pool,
             backfill_alias,
             backfill_start_version,
@@ -33,12 +54,13 @@ pub fn get_processor_status_saver(
         })
     } else {
         let processor_type = config.processor_config.name().to_string();
-        Box::new(DefaultProcessorStatusSaver {
+        ProcessorStatusSaverEnum::Default(DefaultProcessorStatusSaver {
             conn_pool,
             processor_type,
         })
     }
 }
+
 pub struct DefaultProcessorStatusSaver {
     pub conn_pool: ArcDbPool,
     pub processor_type: String,
