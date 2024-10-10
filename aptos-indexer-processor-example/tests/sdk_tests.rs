@@ -30,11 +30,6 @@ mod tests {
         // processor_config;
         let processor_config = ProcessorConfig::EventsProcessor;
 
-        // let postgres_config = PostgresConfig {
-        //     connection_string: db_url.to_string(),
-        //     db_pool_size: 100,
-        // };
-
         println!("DB URL: {}", test_context.database.get_db_url());
 
         let db_config = DbConfig {
@@ -42,6 +37,7 @@ mod tests {
             db_pool_size: 100,
         };
 
+        // TODO: we can abstract this too
         let transaction_stream_config = TransactionStreamConfig {
             indexer_grpc_data_service_address: Url::parse("http://localhost:51254")
                 .expect("Could not parse database url"),
@@ -65,8 +61,6 @@ mod tests {
             .await
             .expect("Failed to create EventsProcessor");
 
-
-
         // Run the processor and define custom validation logic
         test_context
             .run(
@@ -79,7 +73,7 @@ mod tests {
                     // Custom validation logic
                     let events_result = events.load::<Event>(&mut conn);
                     let all_events = events_result.expect("Failed to load events");
-
+                    println!("All events: {:?}", all_events);
                     assert_eq!(all_events.len(), 5, "Expected 5 events");
                     Ok(())
                 },

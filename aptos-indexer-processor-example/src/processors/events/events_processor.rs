@@ -18,7 +18,6 @@ use aptos_indexer_processor_sdk::{
 use aptos_indexer_processor_sdk::traits::processor_trait::ProcessorTrait;
 use tracing::info;
 use async_trait::async_trait;
-// use aptos_indexer_processor_sdk::common_steps::transaction_stream_step::MockTransactionStreamStep;
 
 pub struct EventsProcessor {
     pub config: IndexerProcessorConfig,
@@ -46,7 +45,6 @@ impl EventsProcessor {
 impl ProcessorTrait for EventsProcessor {
     async fn run_processor(&self) -> Result<()> {
         // Run migrations
-        println!("Running migrations");
         run_migrations(
             self.config.db_config.postgres_connection_string.clone(),
             self.db_pool.clone(),
