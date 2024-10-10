@@ -31,10 +31,10 @@ pub fn get_processor_status_saver(
             backfill_end_version,
         }
     } else {
-        let processor_type = config.processor_config.name().to_string();
+        let processor_name = config.processor_config.name().to_string();
         ProcessorStatusSaverEnum::Default {
             conn_pool,
-            processor_type,
+            processor_name,
         }
     }
 }
@@ -42,7 +42,7 @@ pub fn get_processor_status_saver(
 pub enum ProcessorStatusSaverEnum {
     Default {
         conn_pool: ArcDbPool,
-        processor_type: String,
+        processor_name: String,
     },
     Backfill {
         conn_pool: ArcDbPool,
@@ -67,10 +67,10 @@ impl ProcessorStatusSaver for ProcessorStatusSaverEnum {
         match self {
             ProcessorStatusSaverEnum::Default {
                 conn_pool,
-                processor_type,
+                processor_name,
             } => {
                 let status = ProcessorStatus {
-                    processor: processor_type.clone(),
+                    processor: processor_name.clone(),
                     last_success_version: last_success_batch.metadata.end_version as i64,
                     last_transaction_timestamp: end_timestamp,
                 };
