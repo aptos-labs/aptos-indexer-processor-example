@@ -89,6 +89,7 @@ fn establish_connection(database_url: &str) -> BoxFuture<ConnectionResult<AsyncP
 }
 
 fn parse_and_clean_db_url(url: &str) -> (String, Option<String>) {
+    println!("url is: {:?}", url);
     let mut db_url = url::Url::parse(url).expect("Could not parse database url");
     let mut cert_path = None;
 

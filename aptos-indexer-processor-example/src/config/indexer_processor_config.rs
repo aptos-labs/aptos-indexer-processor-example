@@ -5,8 +5,10 @@ use super::processor_config::ProcessorConfig;
 use crate::processors::events::events_processor::EventsProcessor;
 use anyhow::Result;
 use aptos_indexer_processor_sdk::aptos_indexer_transaction_stream::TransactionStreamConfig;
+use aptos_indexer_processor_sdk::traits::processor_trait::ProcessorTrait;
 use aptos_indexer_processor_sdk_server_framework::RunnableConfig;
 use serde::{Deserialize, Serialize};
+use async_trait::async_trait;
 
 pub const QUERY_DEFAULT_RETRIES: u32 = 5;
 pub const QUERY_DEFAULT_RETRY_DELAY_MS: u64 = 500;
@@ -19,7 +21,7 @@ pub struct IndexerProcessorConfig {
     pub db_config: DbConfig,
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl RunnableConfig for IndexerProcessorConfig {
     async fn run(&self) -> Result<()> {
         match self.processor_config {

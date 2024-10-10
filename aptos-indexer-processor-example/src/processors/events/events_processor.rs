@@ -15,7 +15,10 @@ use aptos_indexer_processor_sdk::{
     common_steps::TransactionStreamStep,
     traits::IntoRunnableStep,
 };
+use aptos_indexer_processor_sdk::traits::processor_trait::ProcessorTrait;
 use tracing::info;
+use async_trait::async_trait;
+// use aptos_indexer_processor_sdk::common_steps::transaction_stream_step::MockTransactionStreamStep;
 
 pub struct EventsProcessor {
     pub config: IndexerProcessorConfig,
@@ -37,8 +40,13 @@ impl EventsProcessor {
         })
     }
 
-    pub async fn run_processor(self) -> Result<()> {
+}
+
+#[async_trait::async_trait]
+impl ProcessorTrait for EventsProcessor {
+    async fn run_processor(&self) -> Result<()> {
         // Run migrations
+        println!("Running migrations");
         run_migrations(
             self.config.db_config.postgres_connection_string.clone(),
             self.db_pool.clone(),
@@ -58,26 +66,27 @@ impl EventsProcessor {
         // Define processor steps
         let transaction_stream = TransactionStreamStep::new(TransactionStreamConfig {
             starting_version: Some(starting_version),
-            ..self.config.transaction_stream_config
+            ..self.config.transaction_stream_config.clone()
         })
         .await?;
+
         let events_extractor = EventsExtractor {};
         let events_storer = EventsStorer::new(self.db_pool.clone());
         let version_tracker = LatestVersionProcessedTracker::new(
-            self.config.db_config,
+            self.config.db_config.clone(),
             starting_version,
             self.config.processor_config.name().to_string(),
         )
-        .await?;
+            .await?;
 
         // Connect processor steps together
         let (_, buffer_receiver) = ProcessorBuilder::new_with_inputless_first_step(
             transaction_stream.into_runnable_step(),
         )
-        .connect_to(events_extractor.into_runnable_step(), 10)
-        .connect_to(events_storer.into_runnable_step(), 10)
-        .connect_to(version_tracker.into_runnable_step(), 10)
-        .end_and_return_output_receiver(10);
+            .connect_to(events_extractor.into_runnable_step(), 10)
+            .connect_to(events_storer.into_runnable_step(), 10)
+            .connect_to(version_tracker.into_runnable_step(), 10)
+            .end_and_return_output_receiver(10);
 
         // (Optional) Parse the results
         loop {
