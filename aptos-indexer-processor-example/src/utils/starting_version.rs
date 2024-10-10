@@ -30,7 +30,7 @@ pub async fn get_starting_version(
             .await
             .context("Failed to get latest processed version from DB")?;
     if let Some(latest_processed_version_tracker) = latest_processed_version_from_db {
-        return Ok(latest_processed_version_tracker);
+        return Ok(latest_processed_version_tracker + 1);
     }
 
     // If latest_processed_version is not stored in DB, return the default 0
@@ -51,7 +51,7 @@ pub async fn get_latest_processed_version_from_db(
         )
         .await?
         {
-            Some(status) => Ok(Some(status.last_success_version as u64 + 1)),
+            Some(status) => Ok(Some(status.last_success_version as u64)),
             None => Ok(None),
         };
     }
@@ -62,7 +62,7 @@ pub async fn get_latest_processed_version_from_db(
     )
     .await?
     {
-        Some(status) => Ok(Some(status.last_success_version as u64 + 1)),
+        Some(status) => Ok(Some(status.last_success_version as u64)),
         None => Ok(None),
     }
 }
