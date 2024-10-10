@@ -1,6 +1,6 @@
 use super::{events_extractor::EventsExtractor, events_storer::EventsStorer};
 use crate::{
-    common::processor_status_saver::DefaultProcessorStatusSaver,
+    common::processor_status_saver::get_processor_status_saver,
     config::indexer_processor_config::IndexerProcessorConfig,
     utils::{
         chain_id::check_or_update_chain_id,
@@ -58,20 +58,19 @@ impl EventsProcessor {
         check_or_update_chain_id(grpc_chain_id as i64, self.db_pool.clone()).await?;
 
         // Define processor steps
+        let transaction_stream_config = self.config.transaction_stream_config.clone();
         let transaction_stream = TransactionStreamStep::new(TransactionStreamConfig {
             starting_version: Some(starting_version),
-            ..self.config.transaction_stream_config
+            ..transaction_stream_config
         })
         .await?;
         let events_extractor = EventsExtractor {};
         let events_storer = EventsStorer::new(self.db_pool.clone());
         let version_tracker = VersionTrackerStep::new(
-            self.config.processor_config.name().to_string(),
-            DefaultProcessorStatusSaver {
-                conn_pool: self.db_pool.clone(),
-            },
+            get_processor_status_saver(self.db_pool.clone(), self.config.clone()),
             DEFAULT_UPDATE_PROCESSOR_STATUS_SECS,
         );
+
         // Connect processor steps together
         let (_, buffer_receiver) = ProcessorBuilder::new_with_inputless_first_step(
             transaction_stream.into_runnable_step(),

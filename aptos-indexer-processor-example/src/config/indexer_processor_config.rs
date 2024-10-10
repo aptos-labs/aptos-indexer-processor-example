@@ -17,6 +17,7 @@ pub struct IndexerProcessorConfig {
     pub processor_config: ProcessorConfig,
     pub transaction_stream_config: TransactionStreamConfig,
     pub db_config: DbConfig,
+    pub backfill_config: Option<BackfillConfig>,
 }
 
 #[async_trait::async_trait]
@@ -55,4 +56,10 @@ impl DbConfig {
     pub const fn default_db_pool_size() -> u32 {
         150
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct BackfillConfig {
+    pub backfill_alias: String,
 }

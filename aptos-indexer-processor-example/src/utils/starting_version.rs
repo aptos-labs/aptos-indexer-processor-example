@@ -1,7 +1,10 @@
 use super::database::ArcDbPool;
 use crate::{
     config::indexer_processor_config::IndexerProcessorConfig,
-    db::common::models::processor_status::ProcessorStatusQuery,
+    db::common::models::{
+        backfill_processor_status::BackfillProcessorStatusQuery,
+        processor_status::ProcessorStatusQuery,
+    },
 };
 use anyhow::{Context, Result};
 
@@ -27,7 +30,7 @@ pub async fn get_starting_version(
             .await
             .context("Failed to get latest processed version from DB")?;
     if let Some(latest_processed_version_tracker) = latest_processed_version_from_db {
-        return Ok(latest_processed_version_tracker);
+        return Ok(latest_processed_version_tracker + 1);
     }
 
     // If latest_processed_version is not stored in DB, return the default 0
@@ -41,13 +44,25 @@ pub async fn get_latest_processed_version_from_db(
 ) -> Result<Option<u64>> {
     let mut conn = conn_pool.get().await?;
 
+    if let Some(backfill_config) = &indexer_processor_config.backfill_config {
+        return match BackfillProcessorStatusQuery::get_by_processor(
+            &backfill_config.backfill_alias,
+            &mut conn,
+        )
+        .await?
+        {
+            Some(status) => Ok(Some(status.last_success_version as u64)),
+            None => Ok(None),
+        };
+    }
+
     match ProcessorStatusQuery::get_by_processor(
         indexer_processor_config.processor_config.name(),
         &mut conn,
     )
     .await?
     {
-        Some(status) => Ok(Some(status.last_success_version as u64 + 1)),
+        Some(status) => Ok(Some(status.last_success_version as u64)),
         None => Ok(None),
     }
 }
