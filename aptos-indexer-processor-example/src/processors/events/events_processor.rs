@@ -1,6 +1,6 @@
 use super::{events_extractor::EventsExtractor, events_storer::EventsStorer};
 use crate::{
-    common_steps::latest_processed_version_tracker::LatestVersionProcessedTracker,
+    common::processor_status_saver::DefaultProcessorStatusSaver,
     config::indexer_processor_config::IndexerProcessorConfig,
     utils::{
         chain_id::check_or_update_chain_id,
@@ -12,7 +12,9 @@ use anyhow::Result;
 use aptos_indexer_processor_sdk::{
     aptos_indexer_transaction_stream::{TransactionStream, TransactionStreamConfig},
     builder::ProcessorBuilder,
-    common_steps::TransactionStreamStep,
+    common_steps::{
+        TransactionStreamStep, VersionTrackerStep, DEFAULT_UPDATE_PROCESSOR_STATUS_SECS,
+    },
     traits::IntoRunnableStep,
 };
 use tracing::info;
@@ -63,13 +65,13 @@ impl EventsProcessor {
         .await?;
         let events_extractor = EventsExtractor {};
         let events_storer = EventsStorer::new(self.db_pool.clone());
-        let version_tracker = LatestVersionProcessedTracker::new(
-            self.config.db_config,
-            starting_version,
+        let version_tracker = VersionTrackerStep::new(
             self.config.processor_config.name().to_string(),
-        )
-        .await?;
-
+            DefaultProcessorStatusSaver {
+                conn_pool: self.db_pool.clone(),
+            },
+            DEFAULT_UPDATE_PROCESSOR_STATUS_SECS,
+        );
         // Connect processor steps together
         let (_, buffer_receiver) = ProcessorBuilder::new_with_inputless_first_step(
             transaction_stream.into_runnable_step(),
