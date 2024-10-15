@@ -1,9 +1,13 @@
 use crate::{
     config::indexer_processor_config::IndexerProcessorConfig,
     db::common::models::{
-        backfill_processor_status::BackfillProcessorStatus, processor_status::ProcessorStatus,
+        backfill_processor_status::{BackfillProcessorStatus, BackfillStatus},
+        processor_status::ProcessorStatus,
     },
-    schema::{backfill_processor_status, processor_status},
+    schema::{
+        backfill_processor_status::{self, last_success_version},
+        processor_status,
+    },
     utils::database::{execute_with_better_error, ArcDbPool},
 };
 use anyhow::Result;
@@ -101,11 +105,21 @@ impl ProcessorStatusSaver for ProcessorStatusSaverEnum {
                 backfill_start_version,
                 backfill_end_version,
             } => {
+                let lst_success_version = last_success_batch.metadata.end_version as i64;
+                let backfill_status = if backfill_end_version.is_some_and(|backfill_end_version| {
+                    lst_success_version >= backfill_end_version as i64
+                }) {
+                    BackfillStatus::Complete
+                } else {
+                    BackfillStatus::InProgress
+                };
                 let status = BackfillProcessorStatus {
                     backfill_alias: backfill_alias.clone(),
-                    last_success_version: last_success_batch.metadata.end_version as i64,
+                    backfill_status: backfill_status,
+                    last_success_version: lst_success_version,
                     last_transaction_timestamp: end_timestamp,
                     backfill_start_version: backfill_start_version.unwrap_or(0) as i64,
+
                     backfill_end_version: backfill_end_version
                         .unwrap_or(last_success_batch.metadata.end_version)
                         as i64,
@@ -117,6 +131,7 @@ impl ProcessorStatusSaver for ProcessorStatusSaverEnum {
                         .on_conflict(backfill_processor_status::backfill_alias)
                         .do_update()
                         .set((
+                            backfill_processor_status::backfill_status.eq(excluded(backfill_processor_status::backfill_status)),
                             backfill_processor_status::last_success_version.eq(excluded(backfill_processor_status::last_success_version)),
                             backfill_processor_status::last_updated.eq(excluded(backfill_processor_status::last_updated)),
                             backfill_processor_status::last_transaction_timestamp.eq(excluded(backfill_processor_status::last_transaction_timestamp)),

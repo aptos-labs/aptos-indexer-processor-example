@@ -1,68 +1,83 @@
+use std::cmp::max;
+
 use super::database::ArcDbPool;
 use crate::{
     config::indexer_processor_config::IndexerProcessorConfig,
     db::common::models::{
-        backfill_processor_status::BackfillProcessorStatusQuery,
+        backfill_processor_status::{BackfillProcessorStatusQuery, BackfillStatus},
         processor_status::ProcessorStatusQuery,
     },
 };
 use anyhow::{Context, Result};
 
+/// Get the appropriate starting version for the processor.
+///
+/// If it is a regular processor, this will return the higher of the checkpointed version,
+/// or `staring_version` from the config, or 0 if not set.
+///
+/// If this is a backfill processor and threre is an in-progress backfill, this will return
+/// the checkpointed version + 1.
+///
+/// If this is a backfill processor and there is not an in-progress backfill (i.e., no checkpoint or
+/// backfill status is COMPLETE), this will return `starting_version` from the config, or 0 if not set.
 pub async fn get_starting_version(
     indexer_processor_config: &IndexerProcessorConfig,
     conn_pool: ArcDbPool,
 ) -> Result<u64> {
-    // If starting_version is set in TransactionStreamConfig, use that
-    if indexer_processor_config
-        .transaction_stream_config
-        .starting_version
-        .is_some()
-    {
-        return Ok(indexer_processor_config
-            .transaction_stream_config
-            .starting_version
-            .unwrap());
-    }
-
-    // If it's not set, check if the DB has latest_processed_version set and use that
-    let latest_processed_version_from_db =
+    // Check if there's a checkpoint in the approrpiate processor status table.
+    let latest_processed_version =
         get_latest_processed_version_from_db(indexer_processor_config, conn_pool)
             .await
             .context("Failed to get latest processed version from DB")?;
-    if let Some(latest_processed_version_tracker) = latest_processed_version_from_db {
-        return Ok(latest_processed_version_tracker + 1);
-    }
 
-    // If latest_processed_version is not stored in DB, return the default 0
-    Ok(0)
+    // If nothing checkpointed, return the `starting_version` from the config, or 0 if not set.
+    Ok(latest_processed_version.unwrap_or(
+        indexer_processor_config
+            .transaction_stream_config
+            .starting_version
+            .unwrap_or(0),
+    ))
 }
 
-/// Gets the start version for the processor. If not found, start from 0.
-pub async fn get_latest_processed_version_from_db(
+async fn get_latest_processed_version_from_db(
     indexer_processor_config: &IndexerProcessorConfig,
     conn_pool: ArcDbPool,
 ) -> Result<Option<u64>> {
     let mut conn = conn_pool.get().await?;
 
     if let Some(backfill_config) = &indexer_processor_config.backfill_config {
-        return match BackfillProcessorStatusQuery::get_by_processor(
+        let backfill_status = BackfillProcessorStatusQuery::get_by_processor(
             &backfill_config.backfill_alias,
             &mut conn,
         )
-        .await?
-        {
-            Some(status) => Ok(Some(status.last_success_version as u64)),
-            None => Ok(None),
-        };
+        .await?;
+
+        // Return None if there is no checkpoint or if the backfill is old (complete).
+        // Otherwise, return the checkpointed version + 1.
+        return Ok(
+            backfill_status.and_then(|status| match status.backfill_status {
+                BackfillStatus::InProgress => Some(status.last_success_version as u64 + 1),
+                // If status is Complete, this is the start of a new backfill job.
+                BackfillStatus::Complete => None,
+            }),
+        );
     }
 
-    match ProcessorStatusQuery::get_by_processor(
+    let status = ProcessorStatusQuery::get_by_processor(
         indexer_processor_config.processor_config.name(),
         &mut conn,
     )
-    .await?
-    {
-        Some(status) => Ok(Some(status.last_success_version as u64)),
-        None => Ok(None),
-    }
+    .await?;
+
+    // Return None if there is no checkpoint. Otherwise,
+    // return the higher of the checkpointed version + 1 the `starting_version`.
+    Ok(status.map(|status| {
+        std::cmp::max(
+            status.last_success_version as u64 + 1,
+            indexer_processor_config
+                .transaction_stream_config
+                .starting_version
+                .unwrap_or(0),
+        )
+    }))
 }
