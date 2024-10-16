@@ -81,3 +81,42 @@ async fn get_latest_processed_version_from_db(
         )
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        config::indexer_processor_config::{BackfillConfig, DbConfig, IndexerProcessorConfig},
+        db::common::models::{
+            backfill_processor_status::{BackfillProcessorStatus, BackfillStatus},
+            processor_status::ProcessorStatus,
+        },
+    };
+    use aptos_indexer_processor_sdk::aptos_indexer_transaction_stream::TransactionStreamConfig;
+    use chrono::Utc;
+
+    #[tokio::test]
+    async fn test_get_starting_version_no_checkpoint() {
+        let indexer_processor_config = IndexerProcessorConfig {
+            db_config: DbConfig {
+                postgres_connection_string: "test".to_string(),
+                db_pool_size: 1,
+            },
+            transaction_stream_config: TransactionStreamConfig {
+                indexer_grpc_data_service_address: "test_url".parse().unwrap(),
+                starting_version: None,
+                request_ending_version: None,
+                auth_token: "test".to_string(),
+                request_name_header: "test".to_string(),
+            },
+            processor_config: Default::default(),
+            backfill_config: None,
+        };
+        let conn_pool = ArcDbPool::new(Default::default());
+
+        let starting_version = get_starting_version(&indexer_processor_config, conn_pool)
+            .await
+            .unwrap();
+        assert_eq!(starting_version, 0);
+    }
+}
