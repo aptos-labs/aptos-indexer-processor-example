@@ -50,7 +50,8 @@ async fn get_latest_processed_version_from_db(
             &backfill_config.backfill_alias,
             &mut conn,
         )
-        .await?;
+        .await
+        .context("Failed to query backfill_processor_status table.")?;
 
         // Return None if there is no checkpoint or if the backfill is old (complete).
         // Otherwise, return the checkpointed version + 1.
@@ -67,7 +68,8 @@ async fn get_latest_processed_version_from_db(
         indexer_processor_config.processor_config.name(),
         &mut conn,
     )
-    .await?;
+    .await
+    .context("Failed to query backfill_processor_status table.")?;
 
     // Return None if there is no checkpoint. Otherwise,
     // return the higher of the checkpointed version + 1 the `starting_version`.
@@ -86,37 +88,125 @@ async fn get_latest_processed_version_from_db(
 mod tests {
     use super::*;
     use crate::{
-        config::indexer_processor_config::{BackfillConfig, DbConfig, IndexerProcessorConfig},
-        db::common::models::{
-            backfill_processor_status::{BackfillProcessorStatus, BackfillStatus},
-            processor_status::ProcessorStatus,
+        config::{
+            indexer_processor_config::{DbConfig, IndexerProcessorConfig},
+            processor_config::ProcessorConfig,
         },
+        db::common::models::{
+            backfill_processor_status::BackfillProcessorStatus, processor_status::ProcessorStatus,
+        },
+        schema::{backfill_processor_status, processor_status},
+        utils::database::{execute_with_better_error, new_db_pool, run_migrations},
     };
     use aptos_indexer_processor_sdk::aptos_indexer_transaction_stream::TransactionStreamConfig;
-    use chrono::Utc;
+    use aptos_indexer_testing_framework::database::{PostgresTestDatabase, TestDatabase};
+    use diesel_async::RunQueryDsl;
+    use url::Url;
 
     #[tokio::test]
     async fn test_get_starting_version_no_checkpoint() {
+        let mut db = PostgresTestDatabase::new();
+        db.setup().await.unwrap();
         let indexer_processor_config = IndexerProcessorConfig {
             db_config: DbConfig {
-                postgres_connection_string: "test".to_string(),
+                postgres_connection_string: db.get_db_url(),
                 db_pool_size: 1,
             },
             transaction_stream_config: TransactionStreamConfig {
-                indexer_grpc_data_service_address: "test_url".parse().unwrap(),
+                indexer_grpc_data_service_address: Url::parse("https://test.com").unwrap(),
                 starting_version: None,
                 request_ending_version: None,
                 auth_token: "test".to_string(),
                 request_name_header: "test".to_string(),
+                indexer_grpc_http2_ping_interval_secs: 1,
+                indexer_grpc_http2_ping_timeout_secs: 1,
+                indexer_grpc_reconnection_timeout_secs: 1,
+                indexer_grpc_response_item_timeout_secs: 1,
             },
-            processor_config: Default::default(),
+            processor_config: ProcessorConfig::EventsProcessor,
             backfill_config: None,
         };
-        let conn_pool = ArcDbPool::new(Default::default());
+        let conn_pool = new_db_pool(
+            indexer_processor_config
+                .db_config
+                .postgres_connection_string
+                .as_str(),
+            Some(indexer_processor_config.db_config.db_pool_size),
+        )
+        .await
+        .expect("Failed to create connection pool");
+        run_migrations(
+            indexer_processor_config
+                .db_config
+                .postgres_connection_string
+                .clone(),
+            conn_pool.clone(),
+        )
+        .await;
 
         let starting_version = get_starting_version(&indexer_processor_config, conn_pool)
             .await
             .unwrap();
         assert_eq!(starting_version, 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_starting_version_with_checkpoint() {
+        let mut db = PostgresTestDatabase::new();
+        db.setup().await.unwrap();
+        let indexer_processor_config = IndexerProcessorConfig {
+            db_config: DbConfig {
+                postgres_connection_string: db.get_db_url(),
+                db_pool_size: 1,
+            },
+            transaction_stream_config: TransactionStreamConfig {
+                indexer_grpc_data_service_address: Url::parse("https://test.com").unwrap(),
+                starting_version: None,
+                request_ending_version: None,
+                auth_token: "test".to_string(),
+                request_name_header: "test".to_string(),
+                indexer_grpc_http2_ping_interval_secs: 1,
+                indexer_grpc_http2_ping_timeout_secs: 1,
+                indexer_grpc_reconnection_timeout_secs: 1,
+                indexer_grpc_response_item_timeout_secs: 1,
+            },
+            processor_config: ProcessorConfig::EventsProcessor,
+            backfill_config: None,
+        };
+        let conn_pool = new_db_pool(
+            indexer_processor_config
+                .db_config
+                .postgres_connection_string
+                .as_str(),
+            Some(indexer_processor_config.db_config.db_pool_size),
+        )
+        .await
+        .expect("Failed to create connection pool");
+        run_migrations(
+            indexer_processor_config
+                .db_config
+                .postgres_connection_string
+                .clone(),
+            conn_pool.clone(),
+        )
+        .await;
+
+        let binding = conn_pool.clone();
+        let mut conn = binding.get().await.unwrap();
+        let processor_name = indexer_processor_config.processor_config.name();
+        diesel::insert_into(processor_status::table)
+            .values(ProcessorStatus {
+                processor: processor_name.to_string(),
+                last_success_version: 10,
+                last_transaction_timestamp: None,
+            })
+            .execute(&mut conn)
+            .await
+            .expect("Failed to insert processor status");
+
+        let starting_version = get_starting_version(&indexer_processor_config, conn_pool)
+            .await
+            .unwrap();
+        assert_eq!(starting_version, 11);
     }
 }
