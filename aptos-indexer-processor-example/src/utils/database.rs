@@ -291,7 +291,6 @@ pub async fn run_migrations(postgres_connection_string: String, _conn_pool: ArcD
 #[cfg(not(feature = "libpq"))]
 pub async fn run_migrations(postgres_connection_string: String, conn_pool: ArcDbPool) {
     use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
-
     info!("Running migrations: {:?}", postgres_connection_string);
     let conn = conn_pool
         // We need to use this since AsyncConnectionWrapper doesn't know how to

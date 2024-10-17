@@ -101,79 +101,13 @@ mod tests {
     use diesel_async::RunQueryDsl;
     use url::Url;
 
-    struct TestContext {
-        conn_pool: ArcDbPool,
-        indexer_processor_config: IndexerProcessorConfig,
-    }
-
-    impl TestContext {
-        async fn new(backfill_config: Option<BackfillConfig>) -> Self {
-            let mut db = PostgresTestDatabase::new();
-            db.setup().await.unwrap();
-            let indexer_processor_config = IndexerProcessorConfig {
-                db_config: DbConfig {
-                    postgres_connection_string: db.get_db_url(),
-                    db_pool_size: 2,
-                },
-                transaction_stream_config: TransactionStreamConfig {
-                    indexer_grpc_data_service_address: Url::parse("https://test.com").unwrap(),
-                    starting_version: None,
-                    request_ending_version: None,
-                    auth_token: "test".to_string(),
-                    request_name_header: "test".to_string(),
-                    indexer_grpc_http2_ping_interval_secs: 1,
-                    indexer_grpc_http2_ping_timeout_secs: 1,
-                    indexer_grpc_reconnection_timeout_secs: 1,
-                    indexer_grpc_response_item_timeout_secs: 1,
-                },
-                processor_config: ProcessorConfig::EventsProcessor,
-                backfill_config: backfill_config,
-            };
-
-            let conn_pool = new_db_pool(
-                indexer_processor_config
-                    .db_config
-                    .postgres_connection_string
-                    .as_str(),
-                Some(indexer_processor_config.db_config.db_pool_size),
-            )
-            .await
-            .expect("Failed to create connection pool");
-
-            run_migrations(
-                indexer_processor_config
-                    .db_config
-                    .postgres_connection_string
-                    .clone(),
-                conn_pool.clone(),
-            )
-            .await;
-
-            TestContext {
-                conn_pool,
-                indexer_processor_config,
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn test_with_test_context() {
-        let test_context = TestContext::new(None).await;
-        let config = test_context.indexer_processor_config;
-        let conn_pool = test_context.conn_pool;
-
-        let starting_version = get_starting_version(&config, conn_pool).await.unwrap();
-
-        assert_eq!(starting_version, 0);
-    }
-
-    #[tokio::test]
-    async fn test_without_test_context() {
-        let mut db = PostgresTestDatabase::new();
-        db.setup().await.unwrap();
-        let indexer_processor_config = IndexerProcessorConfig {
+    fn create_indexer_config(
+        db_url: String,
+        backfill_config: Option<BackfillConfig>,
+    ) -> IndexerProcessorConfig {
+        return IndexerProcessorConfig {
             db_config: DbConfig {
-                postgres_connection_string: db.get_db_url(),
+                postgres_connection_string: db_url,
                 db_pool_size: 2,
             },
             transaction_stream_config: TransactionStreamConfig {
@@ -188,25 +122,22 @@ mod tests {
                 indexer_grpc_response_item_timeout_secs: 1,
             },
             processor_config: ProcessorConfig::EventsProcessor,
-            backfill_config: None,
+            backfill_config: backfill_config,
         };
+    }
+
+    #[tokio::test]
+    async fn test_without_test_context() {
+        let mut db = PostgresTestDatabase::new();
+        db.setup().await.unwrap();
+        let indexer_processor_config = create_indexer_config(db.get_db_url(), None);
         let conn_pool = new_db_pool(
-            indexer_processor_config
-                .db_config
-                .postgres_connection_string
-                .as_str(),
+            db.get_db_url().as_str(),
             Some(indexer_processor_config.db_config.db_pool_size),
         )
         .await
         .expect("Failed to create connection pool");
-        run_migrations(
-            indexer_processor_config
-                .db_config
-                .postgres_connection_string
-                .clone(),
-            conn_pool.clone(),
-        )
-        .await;
+        run_migrations(db.get_db_url(), conn_pool.clone()).await;
 
         let starting_version = get_starting_version(&indexer_processor_config, conn_pool)
             .await
@@ -215,195 +146,108 @@ mod tests {
         assert_eq!(starting_version, 0);
     }
 
-    // #[tokio::test]
-    // async fn test_get_starting_version_with_checkpoint() {
-    //     let mut db = PostgresTestDatabase::new();
-    //     db.setup().await.unwrap();
-    //     let indexer_processor_config = IndexerProcessorConfig {
-    //         db_config: DbConfig {
-    //             postgres_connection_string: db.get_db_url(),
-    //             db_pool_size: 2,
-    //         },
-    //         transaction_stream_config: TransactionStreamConfig {
-    //             indexer_grpc_data_service_address: Url::parse("https://test.com").unwrap(),
-    //             starting_version: None,
-    //             request_ending_version: None,
-    //             auth_token: "test".to_string(),
-    //             request_name_header: "test".to_string(),
-    //             indexer_grpc_http2_ping_interval_secs: 1,
-    //             indexer_grpc_http2_ping_timeout_secs: 1,
-    //             indexer_grpc_reconnection_timeout_secs: 1,
-    //             indexer_grpc_response_item_timeout_secs: 1,
-    //         },
-    //         processor_config: ProcessorConfig::EventsProcessor,
-    //         backfill_config: None,
-    //     };
-    //     let conn_pool = new_db_pool(
-    //         indexer_processor_config
-    //             .db_config
-    //             .postgres_connection_string
-    //             .as_str(),
-    //         Some(indexer_processor_config.db_config.db_pool_size),
-    //     )
-    //     .await
-    //     .expect("Failed to create connection pool");
-    //     run_migrations(
-    //         indexer_processor_config
-    //             .db_config
-    //             .postgres_connection_string
-    //             .clone(),
-    //         conn_pool.clone(),
-    //     )
-    //     .await;
+    #[tokio::test]
+    async fn test_get_starting_version_with_checkpoint() {
+        let mut db = PostgresTestDatabase::new();
+        db.setup().await.unwrap();
+        let indexer_processor_config = create_indexer_config(db.get_db_url(), None);
+        let conn_pool = new_db_pool(
+            db.get_db_url().as_str(),
+            Some(indexer_processor_config.db_config.db_pool_size),
+        )
+        .await
+        .expect("Failed to create connection pool");
+        run_migrations(db.get_db_url(), conn_pool.clone()).await;
+        diesel::insert_into(processor_status::table)
+            .values(ProcessorStatus {
+                processor: indexer_processor_config.processor_config.name().to_string(),
+                last_success_version: 10,
+                last_transaction_timestamp: None,
+            })
+            .execute(&mut conn_pool.clone().get().await.unwrap())
+            .await
+            .expect("Failed to insert processor status");
 
-    //     let binding = conn_pool.clone();
-    //     let mut conn = binding.get().await.unwrap();
-    //     let processor_name = indexer_processor_config.processor_config.name();
-    //     diesel::insert_into(processor_status::table)
-    //         .values(ProcessorStatus {
-    //             processor: processor_name.to_string(),
-    //             last_success_version: 10,
-    //             last_transaction_timestamp: None,
-    //         })
-    //         .execute(&mut conn)
-    //         .await
-    //         .expect("Failed to insert processor status");
+        let starting_version = get_starting_version(&indexer_processor_config, conn_pool)
+            .await
+            .unwrap();
 
-    //     let starting_version = get_starting_version(&indexer_processor_config, conn_pool)
-    //         .await
-    //         .unwrap();
-    //     assert_eq!(starting_version, 11);
-    // }
+        assert_eq!(starting_version, 11);
+    }
 
-    // #[tokio::test]
-    // async fn test_backfill_get_starting_version_with_completed_checkpoint() {
-    //     let mut db = PostgresTestDatabase::new();
-    //     let backfill_alias = "backfill_processor".to_string();
-    //     db.setup().await.unwrap();
-    //     let indexer_processor_config = IndexerProcessorConfig {
-    //         db_config: DbConfig {
-    //             postgres_connection_string: db.get_db_url(),
-    //             db_pool_size: 2,
-    //         },
-    //         transaction_stream_config: TransactionStreamConfig {
-    //             indexer_grpc_data_service_address: Url::parse("https://test.com").unwrap(),
-    //             starting_version: None,
-    //             request_ending_version: None,
-    //             auth_token: "test".to_string(),
-    //             request_name_header: "test".to_string(),
-    //             indexer_grpc_http2_ping_interval_secs: 1,
-    //             indexer_grpc_http2_ping_timeout_secs: 1,
-    //             indexer_grpc_reconnection_timeout_secs: 1,
-    //             indexer_grpc_response_item_timeout_secs: 1,
-    //         },
-    //         processor_config: ProcessorConfig::EventsProcessor,
-    //         backfill_config: Some(BackfillConfig {
-    //             backfill_alias: backfill_alias.clone(),
-    //         }),
-    //     };
-    //     let conn_pool = new_db_pool(
-    //         indexer_processor_config
-    //             .db_config
-    //             .postgres_connection_string
-    //             .as_str(),
-    //         Some(indexer_processor_config.db_config.db_pool_size),
-    //     )
-    //     .await
-    //     .expect("Failed to create connection pool");
-    //     run_migrations(
-    //         indexer_processor_config
-    //             .db_config
-    //             .postgres_connection_string
-    //             .clone(),
-    //         conn_pool.clone(),
-    //     )
-    //     .await;
+    #[tokio::test]
+    async fn test_backfill_get_starting_version_with_completed_checkpoint() {
+        let mut db = PostgresTestDatabase::new();
+        let backfill_alias = "backfill_processor".to_string();
+        db.setup().await.unwrap();
+        let indexer_processor_config = create_indexer_config(
+            db.get_db_url(),
+            Some(BackfillConfig {
+                backfill_alias: backfill_alias.clone(),
+            }),
+        );
+        let conn_pool = new_db_pool(
+            db.get_db_url().as_str(),
+            Some(indexer_processor_config.db_config.db_pool_size),
+        )
+        .await
+        .expect("Failed to create connection pool");
+        run_migrations(db.get_db_url(), conn_pool.clone()).await;
+        diesel::insert_into(backfill_processor_status::table)
+            .values(BackfillProcessorStatus {
+                backfill_alias: backfill_alias.clone(),
+                backfill_status: BackfillStatus::Complete,
+                last_success_version: 10,
+                last_transaction_timestamp: None,
+                backfill_start_version: 0,
+                backfill_end_version: 10,
+            })
+            .execute(&mut conn_pool.clone().get().await.unwrap())
+            .await
+            .expect("Failed to insert processor status");
 
-    //     let binding = conn_pool.clone();
-    //     let mut conn = binding.get().await.unwrap();
+        let starting_version = get_starting_version(&indexer_processor_config, conn_pool)
+            .await
+            .unwrap();
 
-    //     diesel::insert_into(backfill_processor_status::table)
-    //         .values(BackfillProcessorStatus {
-    //             backfill_alias: backfill_alias.clone(),
-    //             backfill_status: BackfillStatus::Complete,
-    //             last_success_version: 10,
-    //             last_transaction_timestamp: None,
-    //             backfill_start_version: 0,
-    //             backfill_end_version: 10,
-    //         })
-    //         .execute(&mut conn)
-    //         .await
-    //         .expect("Failed to insert processor status");
+        assert_eq!(starting_version, 0);
+    }
 
-    //     let starting_version = get_starting_version(&indexer_processor_config, conn_pool)
-    //         .await
-    //         .unwrap();
-    //     assert_eq!(starting_version, 0);
-    // }
+    #[tokio::test]
+    async fn test_backfill_get_starting_version_with_inprogress_checkpoint() {
+        let mut db = PostgresTestDatabase::new();
+        let backfill_alias = "backfill_processor".to_string();
+        db.setup().await.unwrap();
+        let indexer_processor_config = create_indexer_config(
+            db.get_db_url(),
+            Some(BackfillConfig {
+                backfill_alias: backfill_alias.clone(),
+            }),
+        );
+        let conn_pool = new_db_pool(
+            db.get_db_url().as_str(),
+            Some(indexer_processor_config.db_config.db_pool_size),
+        )
+        .await
+        .expect("Failed to create connection pool");
+        run_migrations(db.get_db_url(), conn_pool.clone()).await;
+        diesel::insert_into(backfill_processor_status::table)
+            .values(BackfillProcessorStatus {
+                backfill_alias: backfill_alias.clone(),
+                backfill_status: BackfillStatus::InProgress,
+                last_success_version: 10,
+                last_transaction_timestamp: None,
+                backfill_start_version: 0,
+                backfill_end_version: 10,
+            })
+            .execute(&mut conn_pool.clone().get().await.unwrap())
+            .await
+            .expect("Failed to insert processor status");
 
-    // #[tokio::test]
-    // async fn test_backfill_get_starting_version_with_inprogress_checkpoint() {
-    //     let mut db = PostgresTestDatabase::new();
-    //     let backfill_alias = "backfill_processor".to_string();
-    //     db.setup().await.unwrap();
-    //     let indexer_processor_config = IndexerProcessorConfig {
-    //         db_config: DbConfig {
-    //             postgres_connection_string: db.get_db_url(),
-    //             db_pool_size: 2,
-    //         },
-    //         transaction_stream_config: TransactionStreamConfig {
-    //             indexer_grpc_data_service_address: Url::parse("https://test.com").unwrap(),
-    //             starting_version: None,
-    //             request_ending_version: None,
-    //             auth_token: "test".to_string(),
-    //             request_name_header: "test".to_string(),
-    //             indexer_grpc_http2_ping_interval_secs: 1,
-    //             indexer_grpc_http2_ping_timeout_secs: 1,
-    //             indexer_grpc_reconnection_timeout_secs: 1,
-    //             indexer_grpc_response_item_timeout_secs: 1,
-    //         },
-    //         processor_config: ProcessorConfig::EventsProcessor,
-    //         backfill_config: Some(BackfillConfig {
-    //             backfill_alias: backfill_alias.clone(),
-    //         }),
-    //     };
-    //     let conn_pool = new_db_pool(
-    //         indexer_processor_config
-    //             .db_config
-    //             .postgres_connection_string
-    //             .as_str(),
-    //         Some(indexer_processor_config.db_config.db_pool_size),
-    //     )
-    //     .await
-    //     .expect("Failed to create connection pool");
-    //     run_migrations(
-    //         indexer_processor_config
-    //             .db_config
-    //             .postgres_connection_string
-    //             .clone(),
-    //         conn_pool.clone(),
-    //     )
-    //     .await;
+        let starting_version = get_starting_version(&indexer_processor_config, conn_pool)
+            .await
+            .unwrap();
 
-    //     let binding = conn_pool.clone();
-    //     let mut conn = binding.get().await.unwrap();
-
-    //     diesel::insert_into(backfill_processor_status::table)
-    //         .values(BackfillProcessorStatus {
-    //             backfill_alias: backfill_alias.clone(),
-    //             backfill_status: BackfillStatus::InProgress,
-    //             last_success_version: 10,
-    //             last_transaction_timestamp: None,
-    //             backfill_start_version: 0,
-    //             backfill_end_version: 10,
-    //         })
-    //         .execute(&mut conn)
-    //         .await
-    //         .expect("Failed to insert processor status");
-
-    //     let starting_version = get_starting_version(&indexer_processor_config, conn_pool)
-    //         .await
-    //         .unwrap();
-    //     assert_eq!(starting_version, 11);
-    // }
+        assert_eq!(starting_version, 11);
+    }
 }
