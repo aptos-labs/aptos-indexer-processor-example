@@ -127,7 +127,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_without_test_context() {
+    async fn test_get_starting_version_no_checkpoint() {
         let mut db = PostgresTestDatabase::new();
         db.setup().await.unwrap();
         let indexer_processor_config = create_indexer_config(db.get_db_url(), None);
