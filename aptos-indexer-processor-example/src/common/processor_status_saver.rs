@@ -5,7 +5,7 @@ use crate::{
         processor_status::ProcessorStatus,
     },
     schema::{
-        backfill_processor_status::{self, last_success_version},
+        backfill_processor_status::{self},
         processor_status,
     },
     utils::database::{execute_with_better_error, ArcDbPool},
