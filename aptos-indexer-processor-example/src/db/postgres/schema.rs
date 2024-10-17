@@ -4,6 +4,8 @@ diesel::table! {
     backfill_processor_status (backfill_alias) {
         #[max_length = 50]
         backfill_alias -> Varchar,
+        #[max_length = 50]
+        backfill_status -> Varchar,
         last_success_version -> Int8,
         last_updated -> Timestamp,
         last_transaction_timestamp -> Nullable<Timestamp>,
