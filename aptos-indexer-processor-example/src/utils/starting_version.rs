@@ -70,7 +70,7 @@ async fn get_latest_processed_version_from_db(
     .context("Failed to query processor_status table.")?;
 
     // Return None if there is no checkpoint. Otherwise,
-    // return the higher of the checkpointed version + 1 the `starting_version`.
+    // return the higher of the checkpointed version + 1 and `starting_version`.
     Ok(status.map(|status| {
         std::cmp::max(
             status.last_success_version as u64 + 1,
@@ -104,6 +104,7 @@ mod tests {
     fn create_indexer_config(
         db_url: String,
         backfill_config: Option<BackfillConfig>,
+        starting_version: Option<u64>,
     ) -> IndexerProcessorConfig {
         return IndexerProcessorConfig {
             db_config: DbConfig {
@@ -112,7 +113,7 @@ mod tests {
             },
             transaction_stream_config: TransactionStreamConfig {
                 indexer_grpc_data_service_address: Url::parse("https://test.com").unwrap(),
-                starting_version: None,
+                starting_version: starting_version,
                 request_ending_version: None,
                 auth_token: "test".to_string(),
                 request_name_header: "test".to_string(),
@@ -130,7 +131,7 @@ mod tests {
     async fn test_get_starting_version_no_checkpoint() {
         let mut db = PostgresTestDatabase::new();
         db.setup().await.unwrap();
-        let indexer_processor_config = create_indexer_config(db.get_db_url(), None);
+        let indexer_processor_config = create_indexer_config(db.get_db_url(), None, None);
         let conn_pool = new_db_pool(
             db.get_db_url().as_str(),
             Some(indexer_processor_config.db_config.db_pool_size),
@@ -147,10 +148,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_get_starting_version_no_checkpoint_with_start_ver() {
+        let mut db = PostgresTestDatabase::new();
+        db.setup().await.unwrap();
+        let indexer_processor_config = create_indexer_config(db.get_db_url(), None, Some(5));
+        let conn_pool = new_db_pool(
+            db.get_db_url().as_str(),
+            Some(indexer_processor_config.db_config.db_pool_size),
+        )
+        .await
+        .expect("Failed to create connection pool");
+        run_migrations(db.get_db_url(), conn_pool.clone()).await;
+
+        let starting_version = get_starting_version(&indexer_processor_config, conn_pool)
+            .await
+            .unwrap();
+
+        assert_eq!(starting_version, 5);
+    }
+
+    #[tokio::test]
     async fn test_get_starting_version_with_checkpoint() {
         let mut db = PostgresTestDatabase::new();
         db.setup().await.unwrap();
-        let indexer_processor_config = create_indexer_config(db.get_db_url(), None);
+        let indexer_processor_config = create_indexer_config(db.get_db_url(), None, None);
         let conn_pool = new_db_pool(
             db.get_db_url().as_str(),
             Some(indexer_processor_config.db_config.db_pool_size),
@@ -185,6 +206,7 @@ mod tests {
             Some(BackfillConfig {
                 backfill_alias: backfill_alias.clone(),
             }),
+            None,
         );
         let conn_pool = new_db_pool(
             db.get_db_url().as_str(),
@@ -223,6 +245,7 @@ mod tests {
             Some(BackfillConfig {
                 backfill_alias: backfill_alias.clone(),
             }),
+            None,
         );
         let conn_pool = new_db_pool(
             db.get_db_url().as_str(),
