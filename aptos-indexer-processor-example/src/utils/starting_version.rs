@@ -96,7 +96,9 @@ mod tests {
         schema::{backfill_processor_status, processor_status},
         utils::database::{new_db_pool, run_migrations},
     };
-    use aptos_indexer_processor_sdk::aptos_indexer_transaction_stream::TransactionStreamConfig;
+    use aptos_indexer_processor_sdk::aptos_indexer_transaction_stream::{
+        AdditionalHeaders, TransactionStreamConfig,
+    };
     use aptos_indexer_testing_framework::database::{PostgresTestDatabase, TestDatabase};
     use diesel_async::RunQueryDsl;
     use url::Url;
@@ -117,6 +119,7 @@ mod tests {
                 request_ending_version: None,
                 auth_token: "test".to_string(),
                 request_name_header: "test".to_string(),
+                additional_headers: AdditionalHeaders::default(),
                 indexer_grpc_http2_ping_interval_secs: 1,
                 indexer_grpc_http2_ping_timeout_secs: 1,
                 indexer_grpc_reconnection_timeout_secs: 1,
