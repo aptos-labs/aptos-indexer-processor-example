@@ -7,8 +7,8 @@ edition = "2021"
 [dependencies]
 ahash = { version = "0.8.7", features = ["serde"] }
 anyhow = "1.0.86"
-aptos-indexer-processor-sdk = { git = "https://github.com/aptos-labs/aptos-indexer-processor-sdk.git", rev = "aptos-indexer-processor-sdk-v1.0.0" }
-aptos-indexer-processor-sdk-server-framework = { git = "https://github.com/aptos-labs/aptos-indexer-processor-sdk.git", rev = "aptos-indexer-processor-sdk-v1.0.0" }
+aptos-indexer-processor-sdk = { git = "https://github.com/aptos-labs/aptos-indexer-processor-sdk.git", rev = "a6837d9777f73b0951ab898cad77236e6d87984a" }
+# aptos-indexer-processor-sdk-server-framework = { git = "https://github.com/aptos-labs/aptos-indexer-processor-sdk.git", rev = "aptos-indexer-processor-sdk-v1.0.0" }
 aptos-indexer-testing-framework = { git = "https://github.com/aptos-labs/aptos-indexer-processor-sdk.git", rev = "aptos-indexer-processor-sdk-v1.0.0" }
 async-trait = "0.1.80"
 chrono = { version = "0.4.19", features = ["clock", "serde"] }
@@ -52,4 +52,4 @@ postgres-native-tls = "0.5.0"
 tokio-postgres = "0.7.10"
 
 # test transactions example
-test-transactions-example = { path = "../test-transactions-example"}
+test-transactions-example = { path = "../test-transactions-example" }

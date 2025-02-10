@@ -1,5 +1,4 @@
 pub mod common;
-pub mod config;
 pub mod db;
 pub mod processors;
 #[path = "db/postgres/schema.rs"]

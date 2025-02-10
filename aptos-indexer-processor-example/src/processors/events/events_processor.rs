@@ -1,10 +1,9 @@
 use super::{events_extractor::EventsExtractor, events_storer::EventsStorer};
 use crate::{
     common::processor_status_saver::get_processor_status_saver,
-    config::indexer_processor_config::IndexerProcessorConfig,
     utils::{
         chain_id::check_or_update_chain_id,
-        database::{new_db_pool, run_migrations, ArcDbPool},
+        database::{new_db_pool, run_migrations},
         starting_version::get_starting_version,
     },
 };
@@ -15,59 +14,57 @@ use aptos_indexer_processor_sdk::{
     common_steps::{
         TransactionStreamStep, VersionTrackerStep, DEFAULT_UPDATE_PROCESSOR_STATUS_SECS,
     },
-    traits::IntoRunnableStep,
+    config::indexer_processor_config::IndexerProcessorConfig,
+    traits::{processor_trait::ProcessorTrait, IntoRunnableStep},
 };
+use async_trait::async_trait;
 use tracing::info;
 
-pub struct EventsProcessor {
-    pub config: IndexerProcessorConfig,
-    pub db_pool: ArcDbPool,
-}
+pub struct EventsProcessor;
 
-impl EventsProcessor {
-    pub async fn new(config: IndexerProcessorConfig) -> Result<Self> {
-        let conn_pool = new_db_pool(
+#[async_trait]
+impl ProcessorTrait for EventsProcessor {
+    fn name(&self) -> &'static str {
+        "events_processor"
+    }
+
+    async fn run_processor(&self, config: IndexerProcessorConfig) -> Result<()> {
+        // Get a connection pool
+        let db_pool = new_db_pool(
             &config.db_config.postgres_connection_string,
             Some(config.db_config.db_pool_size),
         )
         .await
         .expect("Failed to create connection pool");
 
-        Ok(Self {
-            config,
-            db_pool: conn_pool,
-        })
-    }
-
-    pub async fn run_processor(self) -> Result<()> {
         // Run migrations
         run_migrations(
-            self.config.db_config.postgres_connection_string.clone(),
-            self.db_pool.clone(),
+            config.db_config.postgres_connection_string.clone(),
+            db_pool.clone(),
         )
         .await;
 
         // Merge the starting version from config and the latest processed version from the DB
-        let starting_version = get_starting_version(&self.config, self.db_pool.clone()).await?;
+        let starting_version = get_starting_version(&config, db_pool.clone()).await?;
 
         // Check and update the ledger chain id to ensure we're indexing the correct chain
-        let grpc_chain_id = TransactionStream::new(self.config.transaction_stream_config.clone())
+        let grpc_chain_id = TransactionStream::new(config.transaction_stream_config.clone())
             .await?
             .get_chain_id()
             .await?;
-        check_or_update_chain_id(grpc_chain_id as i64, self.db_pool.clone()).await?;
+        check_or_update_chain_id(grpc_chain_id as i64, db_pool.clone()).await?;
 
         // Define processor steps
-        let transaction_stream_config = self.config.transaction_stream_config.clone();
+        let transaction_stream_config = config.transaction_stream_config.clone();
         let transaction_stream = TransactionStreamStep::new(TransactionStreamConfig {
             starting_version: Some(starting_version),
             ..transaction_stream_config
         })
         .await?;
         let events_extractor = EventsExtractor {};
-        let events_storer = EventsStorer::new(self.db_pool.clone());
+        let events_storer = EventsStorer::new(db_pool.clone());
         let version_tracker = VersionTrackerStep::new(
-            get_processor_status_saver(self.db_pool.clone(), self.config.clone()),
+            get_processor_status_saver(db_pool.clone(), config.clone()),
             DEFAULT_UPDATE_PROCESSOR_STATUS_SECS,
         );
 

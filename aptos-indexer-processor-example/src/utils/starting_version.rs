@@ -1,12 +1,10 @@
 use super::database::ArcDbPool;
-use crate::{
-    config::indexer_processor_config::IndexerProcessorConfig,
-    db::common::models::{
-        backfill_processor_status::{BackfillProcessorStatusQuery, BackfillStatus},
-        processor_status::ProcessorStatusQuery,
-    },
+use crate::db::common::models::{
+    backfill_processor_status::{BackfillProcessorStatusQuery, BackfillStatus},
+    processor_status::ProcessorStatusQuery,
 };
 use anyhow::{Context, Result};
+use aptos_indexer_processor_sdk::config::indexer_processor_config::IndexerProcessorConfig;
 
 /// Get the appropriate starting version for the processor.
 ///
@@ -63,7 +61,7 @@ async fn get_latest_processed_version_from_db(
     }
 
     let status = ProcessorStatusQuery::get_by_processor(
-        indexer_processor_config.processor_config.name(),
+        indexer_processor_config.processor_name.as_str(),
         &mut conn,
     )
     .await
@@ -86,10 +84,6 @@ async fn get_latest_processed_version_from_db(
 mod tests {
     use super::*;
     use crate::{
-        config::{
-            indexer_processor_config::{BackfillConfig, DbConfig, IndexerProcessorConfig},
-            processor_config::ProcessorConfig,
-        },
         db::common::models::{
             backfill_processor_status::BackfillProcessorStatus, processor_status::ProcessorStatus,
         },
@@ -98,6 +92,9 @@ mod tests {
     };
     use aptos_indexer_processor_sdk::aptos_indexer_transaction_stream::{
         AdditionalHeaders, TransactionStreamConfig,
+    };
+    use aptos_indexer_processor_sdk::config::indexer_processor_config::{
+        BackfillConfig, DbConfig, IndexerProcessorConfig,
     };
     use aptos_indexer_testing_framework::database::{PostgresTestDatabase, TestDatabase};
     use diesel_async::RunQueryDsl;
@@ -109,6 +106,7 @@ mod tests {
         starting_version: Option<u64>,
     ) -> IndexerProcessorConfig {
         return IndexerProcessorConfig {
+            processor_name: "test".to_string(),
             db_config: DbConfig {
                 postgres_connection_string: db_url,
                 db_pool_size: 2,
@@ -125,7 +123,6 @@ mod tests {
                 indexer_grpc_reconnection_timeout_secs: 1,
                 indexer_grpc_response_item_timeout_secs: 1,
             },
-            processor_config: ProcessorConfig::EventsProcessor,
             backfill_config: backfill_config,
         };
     }
@@ -184,7 +181,7 @@ mod tests {
         run_migrations(db.get_db_url(), conn_pool.clone()).await;
         diesel::insert_into(processor_status::table)
             .values(ProcessorStatus {
-                processor: indexer_processor_config.processor_config.name().to_string(),
+                processor: indexer_processor_config.processor_name.to_string(),
                 last_success_version: 10,
                 last_transaction_timestamp: None,
             })

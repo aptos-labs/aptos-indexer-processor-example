@@ -1,6 +1,6 @@
 use anyhow::Result;
-use aptos_indexer_processor_example::config::indexer_processor_config::IndexerProcessorConfig;
-use aptos_indexer_processor_sdk_server_framework::ServerArgs;
+use aptos_indexer_processor_example::processors::events::events_processor::EventsProcessor;
+use aptos_indexer_processor_sdk::server_framework::ServerArgs;
 use clap::Parser;
 
 #[cfg(unix)]
@@ -12,6 +12,8 @@ fn main() -> Result<()> {
     let worker_threads = (num_cpus).max(16);
 
     let mut builder = tokio::runtime::Builder::new_multi_thread();
+
+    // TODO: Put the match statement here
     builder
         .disable_lifo_slot()
         .enable_all()
@@ -20,7 +22,8 @@ fn main() -> Result<()> {
         .unwrap()
         .block_on(async {
             let args = ServerArgs::parse();
-            args.run::<IndexerProcessorConfig>(tokio::runtime::Handle::current())
+            let events_processor = EventsProcessor {};
+            args.run(events_processor, tokio::runtime::Handle::current())
                 .await
         })
 }

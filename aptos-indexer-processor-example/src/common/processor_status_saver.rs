@@ -1,5 +1,4 @@
 use crate::{
-    config::indexer_processor_config::IndexerProcessorConfig,
     db::common::models::{
         backfill_processor_status::{BackfillProcessorStatus, BackfillStatus},
         processor_status::ProcessorStatus,
@@ -13,6 +12,7 @@ use crate::{
 use anyhow::Result;
 use aptos_indexer_processor_sdk::common_steps::ProcessorStatusSaver;
 use aptos_indexer_processor_sdk::{
+    config::indexer_processor_config::IndexerProcessorConfig,
     types::transaction_context::TransactionContext,
     utils::{errors::ProcessorError, time::parse_timestamp},
 };
@@ -35,7 +35,7 @@ pub fn get_processor_status_saver(
             backfill_end_version,
         }
     } else {
-        let processor_name = config.processor_config.name().to_string();
+        let processor_name = config.processor_name.to_string();
         ProcessorStatusSaverEnum::Default {
             conn_pool,
             processor_name,
