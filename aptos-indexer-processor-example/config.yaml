@@ -1,8 +1,7 @@
 # This is a template yaml for the aptos-indexer-processor.
 health_check_port: 8085
-server_config:
-  processor_config:
-    type: "events_processor"
+processor_config:
+  processor_name: "events_processor"
   # backfill_config:
   #   backfill_alias: "events_processor_backfill_1"
   transaction_stream_config:

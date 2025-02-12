@@ -1,7 +1,11 @@
 use anyhow::Result;
-use aptos_indexer_processor_example::processors::events::events_processor::EventsProcessor;
+use aptos_indexer_processor_example::{
+    common::{config::PostgresConfig, processor_name::ProcessorName},
+    processors::events::events_processor::EventsProcessor,
+};
 use aptos_indexer_processor_sdk::server_framework::ServerArgs;
 use clap::Parser;
+use std::str::FromStr;
 
 #[cfg(unix)]
 #[global_allocator]
@@ -22,8 +26,16 @@ fn main() -> Result<()> {
         .unwrap()
         .block_on(async {
             let args = ServerArgs::parse();
-            let events_processor = EventsProcessor {};
-            args.run(events_processor, tokio::runtime::Handle::current())
-                .await
+            let processor_name =
+                ProcessorName::from_str(args.get_processor_name::<PostgresConfig>()?.as_str())?;
+            match processor_name {
+                ProcessorName::EventsProcessor => {
+                    args.run::<EventsProcessor, PostgresConfig>(
+                        EventsProcessor {},
+                        tokio::runtime::Handle::current(),
+                    )
+                    .await
+                }
+            }
         })
 }
