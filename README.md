@@ -1,3 +1,10 @@
+> [!IMPORTANT]
+> 
+> The latest Indexer SDK examples are no longer available in this repository. Please refer to the following links:
+> 
+> - [aptos-indexer-processor-sdk/examples](https://github.com/aptos-labs/aptos-indexer-processor-sdk/tree/main/examples) - Find up-to-date examples for using the Indexer SDK.
+> - [aptos-indexer-processors-v2](https://github.com/aptos-labs/aptos-indexer-processors-v2) - Access the latest core Aptos processors.
+
 # :sparkles: Quickstart Guide on Aptos Indexer SDK
 In this guide, we’re going to walk you through all the steps involved with creating a basic events processor in Rust to
 track events on the Aptos blockchain. At the end of this guide, you’ll be able to run the events processor and customize
