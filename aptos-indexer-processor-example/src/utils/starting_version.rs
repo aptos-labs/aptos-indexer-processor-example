@@ -97,8 +97,7 @@ mod tests {
         utils::database::{new_db_pool, run_migrations},
     };
     use aptos_indexer_processor_sdk::aptos_indexer_transaction_stream::{
-        config::ReconnectionConfig,
-        utils::additional_headers::AdditionalHeaders,
+        config::ReconnectionConfig, utils::additional_headers::AdditionalHeaders,
         TransactionStreamConfig,
     };
     use async_trait::async_trait;
@@ -172,14 +171,14 @@ mod tests {
         backfill_config: Option<BackfillConfig>,
         starting_version: Option<u64>,
     ) -> IndexerProcessorConfig {
-        return IndexerProcessorConfig {
+        IndexerProcessorConfig {
             db_config: DbConfig {
                 postgres_connection_string: db_url,
                 db_pool_size: 2,
             },
             transaction_stream_config: TransactionStreamConfig {
                 indexer_grpc_data_service_address: Url::parse("https://test.com").unwrap(),
-                starting_version: starting_version,
+                starting_version,
                 request_ending_version: None,
                 auth_token: Some("test".to_string()),
                 request_name_header: "test".to_string(),
@@ -193,8 +192,8 @@ mod tests {
                 primary_failback_interval_secs: 10,
             },
             processor_config: ProcessorConfig::EventsProcessor,
-            backfill_config: backfill_config,
-        };
+            backfill_config,
+        }
     }
 
     #[tokio::test]
