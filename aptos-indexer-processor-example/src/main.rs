@@ -1,6 +1,6 @@
 use anyhow::Result;
 use aptos_indexer_processor_example::config::indexer_processor_config::IndexerProcessorConfig;
-use aptos_indexer_processor_sdk_server_framework::ServerArgs;
+use aptos_indexer_processor_sdk::server_framework::ServerArgs;
 use clap::Parser;
 
 #[cfg(unix)]
