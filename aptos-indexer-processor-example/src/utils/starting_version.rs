@@ -97,37 +97,103 @@ mod tests {
         utils::database::{new_db_pool, run_migrations},
     };
     use aptos_indexer_processor_sdk::aptos_indexer_transaction_stream::{
-        AdditionalHeaders, TransactionStreamConfig,
+        config::ReconnectionConfig, utils::additional_headers::AdditionalHeaders,
+        TransactionStreamConfig,
     };
-    use aptos_indexer_testing_framework::database::{PostgresTestDatabase, TestDatabase};
+    use async_trait::async_trait;
     use diesel_async::RunQueryDsl;
+    use testcontainers::{
+        core::{IntoContainerPort, WaitFor},
+        runners::AsyncRunner,
+        ContainerAsync, GenericImage, ImageExt,
+    };
     use url::Url;
+
+    #[async_trait]
+    trait TestDatabase: Send + Sync {
+        async fn setup(&mut self) -> anyhow::Result<()>;
+        fn get_db_url(&self) -> String;
+    }
+
+    #[derive(Default)]
+    struct PostgresTestDatabase {
+        connection_string: String,
+        postgres_container: Option<ContainerAsync<GenericImage>>,
+    }
+
+    impl PostgresTestDatabase {
+        fn new() -> Self {
+            Self {
+                postgres_container: None,
+                connection_string: String::new(),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl TestDatabase for PostgresTestDatabase {
+        async fn setup(&mut self) -> Result<()> {
+            let postgres_image = GenericImage::new("postgres", "14")
+                .with_exposed_port(5432.tcp())
+                .with_wait_for(WaitFor::message_on_stderr(
+                    "database system is ready to accept connections",
+                ))
+                .with_env_var("POSTGRES_DB", "postgres")
+                .with_env_var("POSTGRES_USER", "postgres")
+                .with_env_var("POSTGRES_PASSWORD", "postgres");
+
+            let container = postgres_image
+                .start()
+                .await
+                .context("Failed to start Postgres container")?;
+
+            let host = container
+                .get_host()
+                .await
+                .context("Failed to get container host")?;
+            let port = container
+                .get_host_port_ipv4(5432)
+                .await
+                .context("Failed to get container port")?;
+
+            self.connection_string = format!("postgres://postgres:postgres@{host}:{port}/postgres");
+            self.postgres_container = Some(container);
+            Ok(())
+        }
+
+        fn get_db_url(&self) -> String {
+            self.connection_string.clone()
+        }
+    }
 
     fn create_indexer_config(
         db_url: String,
         backfill_config: Option<BackfillConfig>,
         starting_version: Option<u64>,
     ) -> IndexerProcessorConfig {
-        return IndexerProcessorConfig {
+        IndexerProcessorConfig {
             db_config: DbConfig {
                 postgres_connection_string: db_url,
                 db_pool_size: 2,
             },
             transaction_stream_config: TransactionStreamConfig {
                 indexer_grpc_data_service_address: Url::parse("https://test.com").unwrap(),
-                starting_version: starting_version,
+                starting_version,
                 request_ending_version: None,
-                auth_token: "test".to_string(),
+                auth_token: Some("test".to_string()),
                 request_name_header: "test".to_string(),
                 additional_headers: AdditionalHeaders::default(),
                 indexer_grpc_http2_ping_interval_secs: 1,
                 indexer_grpc_http2_ping_timeout_secs: 1,
-                indexer_grpc_reconnection_timeout_secs: 1,
                 indexer_grpc_response_item_timeout_secs: 1,
+                reconnection_config: ReconnectionConfig::default(),
+                transaction_filter: None,
+                backup_endpoints: vec![],
+                primary_failback_interval_secs: 10,
             },
             processor_config: ProcessorConfig::EventsProcessor,
-            backfill_config: backfill_config,
-        };
+            backfill_config,
+        }
     }
 
     #[tokio::test]
